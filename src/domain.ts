@@ -229,7 +229,24 @@ export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
   const candidates=latest?rows(db,`SELECT c.*,o.invoice_ref,o.source_key obligation_key,o.amount_minor obligation_amount,p.source_key payment_key,p.amount_minor payment_amount,o.currency,
   (p.amount_minor-(SELECT COALESCE(SUM(amount_minor),0) FROM allocations a WHERE a.payment_id=p.id)) available_payment_minor,
   (o.amount_minor-(SELECT COALESCE(SUM(amount_minor),0) FROM allocations a WHERE a.obligation_id=o.id)) outstanding_obligation_minor FROM match_candidates c JOIN payments p ON c.payment_id=p.id JOIN obligations o ON c.obligation_id=o.id WHERE c.org_id=? AND c.run_id=? ORDER BY c.status,c.basis`,org,latest.id):[];
-  for(const e of exc){const o=obls.find(o=>o.id===e.obligation_id),p=pays.find(p=>p.id===e.payment_id);if(o){e.obligation_amount=o.amount_minor;e.reported_due_minor=o.reported_due_minor;e.obligation_report=o.report_id;e.due_date=o.due_date;e.currency=o.currency;}if(p){e.payment_amount=p.amount_minor;e.payment_report=p.report_id;e.currency=p.currency;}}
+  // The joins above locate related records, but they read *current* fields.
+  // Overlay every mutable display field from the selected run's frozen evidence,
+  // including invoice references, dates, sources, and currency.
+  const obligationAtRun=new Map<string,any>(obls.map(o=>[o.id,o]));
+  const paymentAtRun=new Map<string,any>(pays.map(p=>[p.id,p]));
+  for(const e of exc){
+    const o=obligationAtRun.get(e.obligation_id),p=paymentAtRun.get(e.payment_id);
+    if(o){
+      e.invoice_ref=o.invoice_ref;e.obligation_key=o.source_key;
+      e.obligation_amount=o.amount_minor;e.reported_due_minor=o.reported_due_minor;
+      e.obligation_report=o.report_id;e.due_date=o.due_date;e.currency=o.currency;
+    }
+    if(p){
+      e.payment_key=p.source_key;e.payment_amount=p.amount_minor;
+      e.payment_report=p.report_id;e.currency=p.currency;
+      if(!o)e.invoice_ref=p.invoice_ref;
+    }
+  }
   // A prior run's candidate balances must be computed from its frozen allocations,
   // not from allocations entered during later review sessions or runs.
   const paidAtRun=new Map<string,number>(),dueAtRun=new Map<string,number>();
@@ -238,9 +255,16 @@ export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
     dueAtRun.set(a.obligation_id,(dueAtRun.get(a.obligation_id)||0)+a.amount_minor);
   }
   for(const c of candidates){
-    const o=obls.find(o=>o.id===c.obligation_id),p=pays.find(p=>p.id===c.payment_id);
-    if(o){c.obligation_amount=o.amount_minor;c.outstanding_obligation_minor=o.amount_minor-(dueAtRun.get(o.id)||0);}
-    if(p){c.payment_amount=p.amount_minor;c.available_payment_minor=p.amount_minor-(paidAtRun.get(p.id)||0);}
+    const o=obligationAtRun.get(c.obligation_id),p=paymentAtRun.get(c.payment_id);
+    if(o){
+      c.invoice_ref=o.invoice_ref;c.obligation_key=o.source_key;
+      c.obligation_amount=o.amount_minor;c.currency=o.currency;
+      c.outstanding_obligation_minor=o.amount_minor-(dueAtRun.get(o.id)||0);
+    }
+    if(p){
+      c.payment_key=p.source_key;c.payment_amount=p.amount_minor;
+      c.available_payment_minor=p.amount_minor-(paidAtRun.get(p.id)||0);
+    }
   }
   const reportRows=rows(db,'SELECT id,kind,filename,as_of,source_system,currency,uploaded_at FROM source_reports WHERE org_id=? ORDER BY uploaded_at DESC',org);
   const conflicts=rows(db,`SELECT c.*,s.raw_json,s.normalized_json FROM import_conflicts c JOIN source_rows s ON s.id=c.source_row_id WHERE c.org_id=? ORDER BY c.created_at DESC`,org);
