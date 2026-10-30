@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createDB,DEMO_ORG,OTHER_ORG,rows,one,run} from '../src/db';
+import {createDB,DEMO_ORG,OTHER_ORG,rows,one,run,sha} from '../src/db';
 import {seed,generateFixtures,resetDemo} from '../src/seed';
 import {addAllocation,addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state} from '../src/domain';
 function setup(){const db=createDB();seed(db);return db;}
@@ -231,5 +231,20 @@ test('historical invoice identities, dates and source reports remain frozen afte
   const pack=exportPack(db,DEMO_ORG,oldRun);
   assert.equal(pack.exceptions.find((e:any)=>e.id===originalException.id).invoice_ref,originalException.invoice_ref);
   assert.equal(pack.candidates.find((c:any)=>c.id===originalCandidate.id).invoice_ref,originalCandidate.invoice_ref);
+  db.close();
+});
+
+test('reconciliation pack includes independently verifiable CSV evidence and refuses tampered reports',()=>{
+  const db=setup(),pack=exportPack(db,DEMO_ORG);
+  assert.ok(pack.source_reports.length>=2);
+  assert.equal(pack.manifest.verified_source_reports,pack.source_reports.length);
+  assert.equal(pack.manifest.source_integrity,'SHA-256 verified at export');
+  for(const source of pack.source_reports){
+    assert.ok(typeof source.raw_csv==='string'&&source.raw_csv.length>0);
+    assert.equal(sha(source.raw_csv.replace(/^\uFEFF/,'')),source.raw_sha);
+  }
+  const first=pack.source_reports[0];
+  run(db,'UPDATE source_reports SET raw_csv=? WHERE id=?',first.raw_csv+'TAMPERED',first.id);
+  assert.throws(()=>exportPack(db,DEMO_ORG),/integrity check/);
   db.close();
 });
