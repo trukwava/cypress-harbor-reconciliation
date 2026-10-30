@@ -6,14 +6,24 @@ import {createApp} from '../src/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import http from 'node:http';
 
 test('HTTP workflow: session, preview errors, report isolation, review, export, reload persistence',async()=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'chh-http-'));const dbfile=path.join(tmp,'data.sqlite');
  const db=createDB(dbfile);seed(db);
  run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','PrivateSystem','private.csv','2026-10-20','USD','sha-other','2026-10-20T00:00:00Z','secret,private');
  const server=createApp(db);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
- const address=server.address();if(!address||typeof address==='string')throw Error('No bound address');const base=`http://127.0.0.1:${address.port}`;
+ const address=server.address();if(!address||typeof address==='string')throw Error('No bound address');const port=address.port;const base=`http://127.0.0.1:${port}`;
  try{
+  async function localRequestWithHost(hostHeader:string):Promise<number>{
+    return new Promise((resolve,reject)=>{
+      const request=http.get({hostname:'127.0.0.1',port,path:'/',headers:{Host:hostHeader}},response=>{
+        response.resume();response.on('end',()=>resolve(response.statusCode||0));
+      });request.on('error',reject);
+    });
+  }
+  assert.equal(await localRequestWithHost('rebinding.attacker.invalid'),403,'DNS-rebinding hostname must not mint a demo session');
+  assert.equal(await localRequestWithHost('rebinding.attacker.invalid:4173'),403);
   const initial=await fetch(base+'/api/state');assert.equal(initial.status,401);
   const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/Cypress Harbor/);
   const cookie=(home.headers.get('set-cookie')||'').split(';')[0];assert.ok(cookie.startsWith('chh_session='));
@@ -37,6 +47,9 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const previous=await req('/api/state?run='+first.body.latest.id);assert.equal(previous.status,200);assert.equal(previous.body.selected_historical,true);
   const badReview=await req('/api/exceptions/'+exc.id+'/review',{status:'open',owner:'x',note:'history write'});assert.equal(badReview.status,409);
   const badOrigin=await fetch(base+'/api/reconcile',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'http://evil.invalid'},body:'{}'});assert.equal(badOrigin.status,403);
+  const nullOrigin=await fetch(base+'/api/reconcile',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'null'},body:'{}'});assert.equal(nullOrigin.status,403);
+  const mismatchedProtocol=await fetch(base+'/api/reconcile',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:base.replace('http:','https:')},body:'{}'});assert.equal(mismatchedProtocol.status,403);
+  const matchingOrigin=await fetch(base+'/api/state',{headers:{Cookie:cookie,Origin:base}});assert.equal(matchingOrigin.status,200);
  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));db.close();}
  const reopened=createDB(dbfile);const stored=await Promise.resolve(reopened.prepare('SELECT COUNT(*) n FROM resolutions WHERE org_id=?').get(DEMO_ORG));assert.ok((stored as any).n>0);reopened.close();
  fs.rmSync(tmp,{recursive:true,force:true});
