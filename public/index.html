@@ -9,7 +9,19 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <div class="shell">
+  <div id="login-view" class="login-view hidden">
+    <div class="login-panel">
+      <div class="eyebrow">LOCAL FINANCIAL OPERATIONS DEMO</div>
+      <h1>Cypress Harbor</h1><p class="sub">Sign in with a named local account. The first administrator credentials appear in the terminal on initial startup.</p>
+      <form id="login-form" class="stack">
+        <label class="field"><span>Username</span><input class="input" id="login-username" autocomplete="username" required /></label>
+        <label class="field"><span>Password</span><input class="input" id="login-password" type="password" autocomplete="current-password" required /></label>
+        <button class="btn primary" type="submit">Sign in</button>
+      </form><p id="login-error" class="error-text" role="alert"></p>
+      <p class="fineprint">Synthetic data only · Localhost only · Not production authentication</p>
+    </div>
+  </div>
+  <div class="shell hidden" id="workspace">
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="brand"><div class="brand-mark" aria-hidden="true">CH</div><div><strong>Cypress Harbor</strong><small>Financial operations</small></div></div>
       <div class="workspace-tag"><span class="pulse"></span> SYNTHETIC DEMO <span class="tag-split">LOCAL ONLY</span></div>
@@ -24,7 +36,7 @@
       <div class="sidebar-version">Rules <span id="rule-label">CHH-1.0.0</span> · Demo session</div>
     </aside>
     <main class="main" id="main">
-      <header class="topbar"><div><div class="breadcrumb">WORKSPACE <span>/</span> <span id="crumb">Exception queue</span></div><div class="topline"><span class="dot"></span> <span>Source-backed explanations</span></div></div><div class="header-actions"><span class="timezone">Dates: America/New_York</span><button id="run-reconcile" class="btn primary">↻ &nbsp; Run reconciliation</button></div></header>
+      <header class="topbar"><div><div class="breadcrumb">WORKSPACE <span>/</span> <span id="crumb">Exception queue</span></div><div class="topline"><span class="dot"></span> <span>Source-backed explanations</span></div></div><div class="header-actions"><span class="timezone">Dates: America/New_York</span><span id="identity-label" class="timezone"></span><button id="manage-users" class="btn minor hidden">Users</button><button id="logout" class="btn minor">Sign out</button><button id="run-reconcile" class="btn primary">↻ &nbsp; Run reconciliation</button></div></header>
       <div class="content">
         <div id="alert" class="alert hidden" role="status" aria-live="polite"></div>
         <div id="loading" class="loading" role="status">Loading workspace and evidence…</div>

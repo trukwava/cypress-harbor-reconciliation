@@ -14,7 +14,7 @@ npm test
 npm start
 ```
 
-Open **http://127.0.0.1:4173**. The first run creates `data/reconciliation.sqlite` and loads deterministic fixtures. The server intentionally binds to loopback only. Set `PORT` to use another local port; see `.env.example` (environment variables are read by Node; the example file is not automatically loaded). To rebuild after source edits, run `npm run build` or `npm run dev`.
+Open **http://127.0.0.1:4173**. The first run creates `data/reconciliation.sqlite`, loads deterministic fixtures, and provisions `demo-admin`. A unique initial password appears **once** in the local terminal. Sign in with that username and password; subsequent restarts do not print the password. The server intentionally binds to loopback only. Set `PORT` to use another local port; see `.env.example` (environment variables are read by Node; the example file is not automatically loaded). To rebuild after source edits, run `npm run build` or `npm run dev`.
 
 ## Workflow
 
@@ -30,7 +30,7 @@ Sample CSVs are under `fixtures/`. Report format descriptions and pilot notes ar
 
 ## What the demo does not do
 
-It cannot authenticate real users, connect to a bank, pay bills, update accounting ledgers, verify a debt, or certify compliance. Session handling is designed only for a **single-user localhost demonstration**; it is **not** suitable for deployment to the public internet. Use synthetic data only. The reconciliation runs are advisory, not an accounting system of record.
+It cannot authenticate users through a production identity provider, connect to a bank, pay bills, update accounting ledgers, verify a debt, or certify compliance. Named local accounts and roles exist for demo validation, but production SSO/MFA and secure deployment are not implemented; it is **not** suitable for deployment to the public internet. Use synthetic data only. The reconciliation runs are advisory, not an accounting system of record.
 
 ## Validation
 
@@ -38,7 +38,7 @@ It cannot authenticate real users, connect to a bank, pay bills, update accounti
 npm test
 ```
 
-The suite includes allocation and property/organization boundary tests, CSV malformed-input handling, duplicate imports, correction review, reopen conditions, historical pack consistency, HTTP source access controls, and reload persistence. On October 30, 2026, **14 tests passed locally** on Node 22.16; check current CI or rerun them rather than assuming future revisions inherit that result.
+The suite includes allocation and property/organization boundary tests, CSV malformed-input handling, duplicate imports, correction review, reopen conditions, historical pack consistency, HTTP source access controls, and reload persistence. On October 30, 2026, **17 tests passed locally** on Node 22.16; check current CI or rerun them rather than assuming future revisions inherit that result.
 
 ## Design decisions
 
@@ -46,11 +46,11 @@ The suite includes allocation and property/organization boundary tests, CSV malf
 - Source rows and immutable reconciliation snapshots preserve provenance even when reviewed corrections are applied.
 - Integer minor units prevent floating-point money arithmetic; database triggers enforce allocation limits and same-property/currency boundaries.
 - All matching is deterministic. A weak identifier is a proposal, not an authorization.
-- The API is scoped to the synthetic demo organization, with a session cookie, origin checks on writes, a JSON request-size bound, and explicit constraints. Production requires a full authorization model, CSRF threat review, migrations, and separate operational controls.
+- API requests resolve their organization and role from a named, locally authenticated account with a revocable eight-hour session cookie. All writes retain origin checks, JSON size bounds and database-level tenant constraints. Production requires a full authorization model, CSRF threat review, migrations, and separate operational controls.
 
 ## Data storage and reset
 
-The SQLite database persists to `data/reconciliation.sqlite` by default. The **Reset demo** action replaces only the demo tenant's records with the original fixtures. Reset is destructive for demo decisions. Download an export beforehand if you want to preserve a run. The app does not automatically delete the local SQLite database; delete the `data/` directory manually when the server is stopped if you want a clean local removal.
+The SQLite database persists to `data/reconciliation.sqlite` by default. The **Reset demo** action replaces only the demo tenant's financial records with the original fixtures, retaining local accounts and sessions. Reset is destructive for demo decisions. Download an export beforehand if you want to preserve a run. The app does not automatically delete the local SQLite database; delete the `data/` directory manually when the server is stopped if you want a clean local removal.
 
 ## Status
 
@@ -60,8 +60,9 @@ The SQLite database persists to `data/reconciliation.sqlite` by default. The **R
 - [x] Reconciliation runs and exception-review queue
 - [x] Frozen historical evidence and JSON export
 - [x] Deterministic demo fixtures and automated tests
-- [ ] Real authentication, organization role separation, and production threat model
+- [x] Named local users, scoped sessions, three role levels, and regression tests
+- [ ] Production identity (SSO, MFA and recovery), multi-organization memberships, and full threat model
 - [ ] Institutional connectors, approvals, and compliance review
 - [ ] Finance-reviewer shadow pilot with actual (authorized) records
 
-See [docs/SECURITY.md](docs/SECURITY.md) for the explicit local-demo security boundary and [docs/PILOT.md](docs/PILOT.md) for a safe next-stage validation plan.
+See [docs/AUTH.md](docs/AUTH.md) for local account setup and the permission matrix and [docs/SECURITY.md](docs/SECURITY.md) for the explicit local-demo security boundary and [docs/PILOT.md](docs/PILOT.md) for a safe next-stage validation plan.
