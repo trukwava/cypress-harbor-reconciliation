@@ -230,13 +230,24 @@ export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
   (p.amount_minor-(SELECT COALESCE(SUM(amount_minor),0) FROM allocations a WHERE a.payment_id=p.id)) available_payment_minor,
   (o.amount_minor-(SELECT COALESCE(SUM(amount_minor),0) FROM allocations a WHERE a.obligation_id=o.id)) outstanding_obligation_minor FROM match_candidates c JOIN payments p ON c.payment_id=p.id JOIN obligations o ON c.obligation_id=o.id WHERE c.org_id=? AND c.run_id=? ORDER BY c.status,c.basis`,org,latest.id):[];
   for(const e of exc){const o=obls.find(o=>o.id===e.obligation_id),p=pays.find(p=>p.id===e.payment_id);if(o){e.obligation_amount=o.amount_minor;e.reported_due_minor=o.reported_due_minor;e.obligation_report=o.report_id;e.due_date=o.due_date;e.currency=o.currency;}if(p){e.payment_amount=p.amount_minor;e.payment_report=p.report_id;e.currency=p.currency;}}
-  for(const c of candidates){const o=obls.find(o=>o.id===c.obligation_id),p=pays.find(p=>p.id===c.payment_id);if(o)c.obligation_amount=o.amount_minor;if(p)c.payment_amount=p.amount_minor;}
+  // A prior run's candidate balances must be computed from its frozen allocations,
+  // not from allocations entered during later review sessions or runs.
+  const paidAtRun=new Map<string,number>(),dueAtRun=new Map<string,number>();
+  for(const a of allocs){
+    paidAtRun.set(a.payment_id,(paidAtRun.get(a.payment_id)||0)+a.amount_minor);
+    dueAtRun.set(a.obligation_id,(dueAtRun.get(a.obligation_id)||0)+a.amount_minor);
+  }
+  for(const c of candidates){
+    const o=obls.find(o=>o.id===c.obligation_id),p=pays.find(p=>p.id===c.payment_id);
+    if(o){c.obligation_amount=o.amount_minor;c.outstanding_obligation_minor=o.amount_minor-(dueAtRun.get(o.id)||0);}
+    if(p){c.payment_amount=p.amount_minor;c.available_payment_minor=p.amount_minor-(paidAtRun.get(p.id)||0);}
+  }
   const reportRows=rows(db,'SELECT id,kind,filename,as_of,source_system,currency,uploaded_at FROM source_reports WHERE org_id=? ORDER BY uploaded_at DESC',org);
   const conflicts=rows(db,`SELECT c.*,s.raw_json,s.normalized_json FROM import_conflicts c JOIN source_rows s ON s.id=c.source_row_id WHERE c.org_id=? ORDER BY c.created_at DESC`,org);
   const unresolved=rows(db,`SELECT s.id,s.report_id,s.row_index,s.validation_error,s.raw_json FROM source_rows s WHERE s.org_id=? AND s.validation_error IS NOT NULL ORDER BY s.row_index`,org);
   const props=snap?.properties||rows(db,`SELECT p.*,e.name entity_name,(SELECT group_concat(alias, ', ') FROM aliases a WHERE a.property_id=p.id) aliases,(SELECT group_concat(source_system||': '||account_ref,'; ') FROM external_accounts a WHERE a.property_id=p.id) accounts FROM properties p JOIN entities e ON p.entity_id=e.id WHERE p.org_id=? ORDER BY p.id`,org);
   const metrics={original_obligations_minor:withAlloc.reduce((s,o)=>s+o.amount_minor,0),original_source_due_minor:withAlloc.reduce((s,o)=>s+o.reported_due_minor,0),explanatory_outstanding_minor:withAlloc.reduce((s,o)=>s+o.remaining_minor,0),allocated_minor:allocs.reduce((s,a)=>s+a.amount_minor,0),unresolved_exceptions:exc.filter(x=>x.status!=='reviewed').length};
-  return {selected_historical:!!(selectedRun && currentRun && selectedRun!==currentRun.id),organization:one(db,'SELECT id,name,is_demo FROM organizations WHERE id=?',org),rule_version:RULE_VERSION,latest, runs:rows(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC LIMIT 20',org),metrics,properties:props,reports:reportRows,obligations:withAlloc,payments:pays,allocations:allocs,exceptions:exc,candidates,conflicts,unresolved, audit:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC LIMIT 40',org)};
+  return {selected_historical:!!(selectedRun && currentRun && selectedRun!==currentRun.id),organization:one(db,'SELECT id,name,is_demo FROM organizations WHERE id=?',org),rule_version:latest?.rule_version||RULE_VERSION,latest, runs:rows(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC LIMIT 20',org),metrics,properties:props,reports:reportRows,obligations:withAlloc,payments:pays,allocations:allocs,exceptions:exc,candidates,conflicts,unresolved, audit:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC LIMIT 40',org)};
 }
 export function exportPack(db:DB,org=DEMO_ORG,runId?:string){
   const s=state(db,org,runId), reportIds=new Set<string>();for(const o of s.obligations)reportIds.add(o.report_id);for(const p of s.payments)reportIds.add(p.report_id);
