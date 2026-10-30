@@ -5,3 +5,13 @@
 @media(max-width:740px){.shell{display:block}.sidebar{position:relative;height:auto;width:100%;padding:13px 14px}.brand{padding:0 0 10px}.workspace-tag,.sidebar-bottom,.sidebar-version{display:none}.nav{display:flex;overflow-x:auto;padding-bottom:2px}.nav-item{flex:none;width:auto;padding:9px 10px;font-size:11px}.nav-item.active:before{display:none}.nav-icon{display:none}.topbar{padding:14px 16px;min-height:66px}.header-actions{gap:7px}.content{padding:22px 15px}.intro{align-items:start}.intro h1{font-size:24px}.kpis{gap:8px}.kpi{padding:12px;min-height:100px}.kpi-num{font-size:20px}.panel-head{padding:14px}.inline-fields{grid-template-columns:1fr}.search{min-width:145px}.metadata{grid-template-columns:1fr}.dialog-body{padding:15px}.dialog-head{padding:15px}.btn{padding:8px 9px;font-size:11px}}
 /* Credentialed local demo sign-in */
 .login-view{min-height:100vh;display:grid;place-items:center;padding:24px;background:#eef5f2}.login-panel{width:min(440px,100%);background:#fff;padding:36px;border:1px solid #d0e1da;border-radius:14px;box-shadow:0 16px 50px rgba(23,56,55,.13)}.login-panel h1{font:700 31px Georgia,serif;margin:10px 0 16px}.login-panel .sub{line-height:1.6;margin-bottom:24px}.login-panel .btn{width:100%;padding:12px}.login-panel .fineprint{margin-top:22px}.login-panel .field{font-size:12px;font-weight:700}#identity-label{white-space:nowrap}
+
+/* Narrow screens: keep user identity and actions within the viewport. */
+@media(max-width:740px){
+  .topbar{flex-wrap:wrap;align-items:flex-start;gap:10px}
+  .header-actions{width:100%;min-width:0;flex-wrap:wrap;justify-content:space-between;gap:8px}
+  #identity-label{white-space:normal;min-width:0;overflow-wrap:anywhere}
+  .nav-item{min-height:44px;padding:11px 12px;font-size:12px}
+  .btn{min-height:40px}
+  .kpi-num{overflow-wrap:anywhere}
+}
