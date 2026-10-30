@@ -270,8 +270,16 @@ export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
   const conflicts=rows(db,`SELECT c.*,s.raw_json,s.normalized_json FROM import_conflicts c JOIN source_rows s ON s.id=c.source_row_id WHERE c.org_id=? ORDER BY c.created_at DESC`,org);
   const unresolved=rows(db,`SELECT s.id,s.report_id,s.row_index,s.validation_error,s.raw_json FROM source_rows s WHERE s.org_id=? AND s.validation_error IS NOT NULL ORDER BY s.row_index`,org);
   const props=snap?.properties||rows(db,`SELECT p.*,e.name entity_name,(SELECT group_concat(alias, ', ') FROM aliases a WHERE a.property_id=p.id) aliases,(SELECT group_concat(source_system||': '||account_ref,'; ') FROM external_accounts a WHERE a.property_id=p.id) accounts FROM properties p JOIN entities e ON p.entity_id=e.id WHERE p.org_id=? ORDER BY p.id`,org);
+  // Use the audit event sequence rather than wall-clock milliseconds:
+  // multiple imports and runs can share timestamps within the same millisecond.
+  const completedAudit=currentRun?one(db,
+    "SELECT rowid AS audit_row FROM audit_events WHERE org_id=? AND object_type='reconciliation_run' AND object_id=? AND action='reconciliation.completed' ORDER BY rowid DESC LIMIT 1",
+    org,currentRun.id):null;
+  const pendingEvidenceEvents=completedAudit?one(db,
+    "SELECT COUNT(*) n FROM audit_events WHERE org_id=? AND rowid>? AND action IN ('import.completed','conflict.accepted','conflict.rejected','allocation.created','property.alias_added')",
+    org,completedAudit.audit_row).n:0;
   const metrics={original_obligations_minor:withAlloc.reduce((s,o)=>s+o.amount_minor,0),original_source_due_minor:withAlloc.reduce((s,o)=>s+o.reported_due_minor,0),explanatory_outstanding_minor:withAlloc.reduce((s,o)=>s+o.remaining_minor,0),allocated_minor:allocs.reduce((s,a)=>s+a.amount_minor,0),unresolved_exceptions:exc.filter(x=>x.status!=='reviewed').length};
-  return {selected_historical:!!(selectedRun && currentRun && selectedRun!==currentRun.id),organization:one(db,'SELECT id,name,is_demo FROM organizations WHERE id=?',org),rule_version:latest?.rule_version||RULE_VERSION,latest, runs:rows(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC LIMIT 20',org),metrics,properties:props,reports:reportRows,obligations:withAlloc,payments:pays,allocations:allocs,exceptions:exc,candidates,conflicts,unresolved, audit:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC LIMIT 40',org)};
+  return {selected_historical:!!(selectedRun && currentRun && selectedRun!==currentRun.id),organization:one(db,'SELECT id,name,is_demo FROM organizations WHERE id=?',org),rule_version:latest?.rule_version||RULE_VERSION,latest,pending_reconciliation:pendingEvidenceEvents>0,pending_evidence_events:pendingEvidenceEvents, runs:rows(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC LIMIT 20',org),metrics,properties:props,reports:reportRows,obligations:withAlloc,payments:pays,allocations:allocs,exceptions:exc,candidates,conflicts,unresolved, audit:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC LIMIT 40',org)};
 }
 export function exportPack(db:DB,org=DEMO_ORG,runId?:string){
   const s=state(db,org,runId), reportIds=new Set<string>();for(const o of s.obligations)reportIds.add(o.report_id);for(const p of s.payments)reportIds.add(p.report_id);
