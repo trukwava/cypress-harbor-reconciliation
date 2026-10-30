@@ -53,6 +53,13 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const provision=await as(cookie,'/api/users',{username:'new-analyst',password:'New-Analyst-Password-123',role:'reviewer'});assert.equal(provision.status,201);
   async function req(url:string,payload?:any){const r=await fetch(base+url,{headers:{Cookie:cookie,...(payload===undefined?{}:{'Content-Type':'application/json'})},...(payload===undefined?{}:{method:'POST',body:JSON.stringify(payload)})});let data:any=await r.text();try{data=JSON.parse(data)}catch{}return {status:r.status,body:data};}
   const first=await req('/api/state');assert.equal(first.status,200);assert.equal(first.body.obligations.length,40);
+  const csvDownload=await as(viewerCookie,'/api/export/exceptions.csv?run='+encodeURIComponent(first.body.latest.id));
+  assert.equal(csvDownload.status,200);
+  assert.match(csvDownload.headers.get('content-type')||'',/text\/csv/);
+  assert.match(csvDownload.headers.get('content-disposition')||'',/attachment/);
+  assert.match(await csvDownload.text(),/"run_id","exception_id"/);
+  assert.equal((await as(outsideCookie,'/api/export/exceptions.csv?run='+encodeURIComponent(first.body.latest.id))).status,404);
+
   assert.equal((await req('/api/reports/OTHER-R1/raw')).status,404);
   assert.equal((await as(outsideCookie,'/api/reports/'+encodeURIComponent(first.body.reports[0].id)+'/raw')).status,404);
   assert.equal((await req('/api/reports/'+encodeURIComponent(first.body.reports[0].id)+'/raw')).status,200);
