@@ -2,7 +2,7 @@ import http,{IncomingMessage,ServerResponse} from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import {createDB,DB,DEMO_ORG,one,rows} from './db';
+import {createDB,DB,DEMO_ORG,one,rows,sha} from './db';
 import {seed,resetDemo,writeFixtureFiles} from './seed';
 import {addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state,audit} from './domain';
 import {authenticate,bootstrapAdmin,createUser,issueSession,listUsers,principalFromToken,requireRole,revokeSession} from './auth';
@@ -97,7 +97,8 @@ export function createApp(db:DB){
           const eid=decodeURIComponent(url.pathname.split('/').at(-1)||'');
           const exc=one(db,'SELECT * FROM exceptions WHERE id=? AND org_id=?',eid,org);
           if(!exc)throw new DomainError('Exception not found',404);
-          const frozen=one(db,'SELECT snapshot_json FROM run_snapshots WHERE run_id=? AND org_id=?',exc.run_id,org);
+          const frozen=one(db,'SELECT snapshot_json,snapshot_sha FROM run_snapshots WHERE run_id=? AND org_id=?',exc.run_id,org);
+          if(frozen && (!frozen.snapshot_sha||sha(frozen.snapshot_json)!==frozen.snapshot_sha))throw new DomainError('Frozen reconciliation snapshot failed SHA-256 integrity check',409);
           const snapshot=frozen?JSON.parse(frozen.snapshot_json):null;
           const targetObl=snapshot?.obligations.find((o:any)=>o.id===exc.obligation_id);
           const targetPay=snapshot?.payments.find((p:any)=>p.id===exc.payment_id);
@@ -111,8 +112,9 @@ export function createApp(db:DB){
           return send(res,200,{exception:exc,evidence,allocations:ownRows,rule_version:appliedRule?.rule_version});
         }
         if(m==='GET'&&url.pathname.startsWith('/api/reports/')&&url.pathname.endsWith('/raw')){
-          const reportId=url.pathname.split('/')[3];const report=one(db,'SELECT filename,raw_csv FROM source_reports WHERE id=? AND org_id=?',reportId,org);
+          const reportId=url.pathname.split('/')[3];const report=one(db,'SELECT filename,raw_csv,raw_sha FROM source_reports WHERE id=? AND org_id=?',reportId,org);
           if(!report)throw new DomainError('Report not found',404);
+          if(sha(report.raw_csv.replace(/^\uFEFF/,''))!==report.raw_sha)throw new DomainError('Stored source CSV failed SHA-256 integrity check',409);
           return send(res,200,report.raw_csv,'text/csv; charset=utf-8',{'Content-Disposition':'attachment; filename="source-report.csv"'});
         }
         if(m==='POST'){
