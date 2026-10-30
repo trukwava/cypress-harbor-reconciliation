@@ -87,7 +87,10 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         assert "BROWSER-OBL-1" in page.locator("#preview-panel").inner_text()
         page.locator("#commit-import").click()
         page.locator("#alert").get_by_text("Report preserved", exact=False).wait_for()
-        assert len(state()["obligations"]) == 41
+        # Import preserves the record, but the last reconciliation view stays frozen.
+        imported_state = state()
+        assert len(imported_state["obligations"]) == 40
+        assert any(r["filename"] == "browser_obligation.csv" for r in imported_state["reports"])
 
         # Fresh run and downloadable evidence pack; prior run remains frozen.
         page.locator("#run-reconcile").click()
