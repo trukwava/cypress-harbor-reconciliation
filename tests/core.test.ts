@@ -149,3 +149,28 @@ test('amount mismatch and unmatched payment are visible as separate exception ty
   assert.ok(kinds.has('unmatched_payment'));
   db.close();
 });
+
+test('database rejects cross-tenant foreign keys on insert and update, independent of API',()=>{
+  const db=setup();
+  const otherEntity=one(db,'SELECT id FROM entities WHERE org_id=?',OTHER_ORG);
+  const p=one(db,'SELECT id FROM properties WHERE org_id=?',DEMO_ORG);
+  const ob=one(db,'SELECT id FROM obligations WHERE org_id=?',DEMO_ORG);
+  const otherProp=one(db,'SELECT id FROM properties WHERE org_id=?',OTHER_ORG);
+  const report=one(db,'SELECT id FROM source_reports WHERE org_id=? AND kind=?',DEMO_ORG,'obligation');
+  const row=one(db,'SELECT id FROM source_rows WHERE report_id=? AND validation_error IS NULL LIMIT 1',report.id);
+  assert.throws(()=>run(db,'UPDATE properties SET entity_id=? WHERE id=?',otherEntity.id,p.id),/cross-organization reference/);
+  assert.throws(()=>run(db,'INSERT INTO aliases VALUES (?,?,?,?,?)','rogue-alias',DEMO_ORG,otherProp.id,'Rogue',1),/cross-organization reference/);
+  assert.throws(()=>run(db,'INSERT INTO external_accounts VALUES (?,?,?,?,?)','rogue-account',DEMO_ORG,otherProp.id,'ExternalSystem','acct-123'),/cross-organization reference/);
+  assert.throws(()=>run(db,'UPDATE obligations SET property_id=? WHERE id=?',otherProp.id,ob.id),/cross-organization reference/);
+  assert.throws(()=>run(db,'INSERT INTO source_rows VALUES (?,?,?,?,?,?,?,?,?,?)','rogue-row',OTHER_ORG,report.id,999,'rogue','obligation','{}','{}','abc',null),/cross-organization reference/);
+  run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','Outside','other.csv','2026-10-20','USD','otherhash',new Date().toISOString(),'id,value');
+  run(db,'INSERT INTO source_rows VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-ROW',OTHER_ORG,'OTHER-R1',1,'external','obligation','{}','{}','rowhash',null);
+  assert.throws(()=>run(db,'UPDATE obligations SET source_row_id=? WHERE id=?','OTHER-ROW',ob.id),/cross-organization reference/);
+  const otherRun=one(db,'SELECT id FROM reconciliation_runs WHERE org_id=?',DEMO_ORG);
+  assert.throws(()=>run(db,'UPDATE run_snapshots SET org_id=? WHERE run_id=?',OTHER_ORG,otherRun.id),/cross-organization reference/);
+  assert.throws(()=>run(db,'INSERT INTO match_decisions VALUES (?,?,?,?,?,?,?,?)','wrong-org-decision',OTHER_ORG,one(db,'SELECT id FROM match_candidates WHERE org_id=?',DEMO_ORG).id,'rejected',0,'bad','bad',new Date().toISOString()),/cross-organization reference/);
+  const sample=one(db,'SELECT id FROM exceptions WHERE org_id=?',DEMO_ORG);
+  assert.throws(()=>run(db,'INSERT INTO resolutions VALUES (?,?,?,?,?,?,?)','wrong-org-resolution',OTHER_ORG,sample.id,'open','bad','bad',new Date().toISOString()),/cross-organization reference/);
+  assert.ok(otherRun.id && row.id);
+  db.close();
+});
