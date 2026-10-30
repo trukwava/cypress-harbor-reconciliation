@@ -22,7 +22,7 @@ Open **http://127.0.0.1:4173**. The first run creates `data/reconciliation.sqlit
 2. **Match review:** Inspect proposed invoice/property matches. Accept or reject a candidate with rationale. Acceptance records a bounded allocation; it does not edit the source report or initiate a payment.
 3. **Source imports:** Preview obligation and payment CSVs separately before committing. Inspect parser errors and unresolved mappings. Report date and source system are required. Duplicate records are idempotent; corrected records enter review rather than silently overwriting an earlier source.
 4. **Property registry:** Inspect canonical property IDs, entity affiliations, account references, and reviewed aliases. A fuzzy address alone never resolves a property automatically.
-5. **Runs & exports:** Reconcile again after decisions, select historical runs, and download a JSON reconciliation pack with frozen source evidence, reconciliation basis, rule version, and unresolved totals.
+5. **Runs & exports:** Reconcile again after decisions, select historical runs, and download a JSON reconciliation pack with frozen source evidence, reconciliation basis, rule version, and unresolved totals. Export the exception queue for any run as spreadsheet-safe UTF-8 CSV; that is a summary, not a substitute for the full evidence pack.
 
 Synthetic data includes **12 properties, 3 entities, 40 obligations, 35 payments**, one deliberately ambiguous address, invoice **101** on two distinct properties, partial allocations, a credit, and a stale source. For the $1,000 obligation with a $600 payment, the explanatory remainder is $400—**not** a second $1,000 debt.
 
