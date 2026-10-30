@@ -33,6 +33,11 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const home=await fetch(base+'/');assert.equal(home.status,200);assert.match(await home.text(),/Cypress Harbor/);
   assert.equal(home.headers.get('set-cookie'),null);
   async function signIn(username:string,password:string){return fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({username,password})});}
+  const forgedLogin=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://other.example'},body:JSON.stringify({username:'demo-admin',password:'Demo-Admin-Password-123'})});
+  assert.equal(forgedLogin.status,403);
+  assert.equal(forgedLogin.headers.get('set-cookie'),null);
+  const nullLogin=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:'null'},body:JSON.stringify({username:'demo-admin',password:'Demo-Admin-Password-123'})});
+  assert.equal(nullLogin.status,403);
   const unknown=await signIn('no-such-user','wrong-password');assert.equal(unknown.status,401);
   const login=await signIn('demo-admin','Demo-Admin-Password-123');assert.equal(login.status,200);
   const cookie=(login.headers.get('set-cookie')||'').split(';')[0];assert.ok(cookie.startsWith('chh_session='));
