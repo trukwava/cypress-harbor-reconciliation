@@ -57,7 +57,7 @@ export function previewImport(db:DB,x:ReportInput,org=DEMO_ORG){
 export function audit(db:DB,org:string,action:string,objType:string,objId:string,details:object={},actor='Demo Reviewer'){
   run(db,'INSERT INTO audit_events VALUES (?,?,?,?,?,?,?,?)',id('event'),org,actor,action,objType,objId,JSON.stringify(details),now());
 }
-export function commitImport(db:DB,x:ReportInput,org=DEMO_ORG){
+export function commitImport(db:DB,x:ReportInput,org=DEMO_ORG,actor='Demo Reviewer'){
   const view=previewImport(db,x,org);
   if(!view.count)throw new DomainError('Report has no data rows');
   return transaction(db,()=>{
@@ -81,7 +81,7 @@ export function commitImport(db:DB,x:ReportInput,org=DEMO_ORG){
       imported++;
     }
     run(db,'INSERT INTO import_batches VALUES (?,?,?,?,?,?,?,?,?)',id('batch'),org,report_id,now(),view.count,imported,duplicates,errors,conflicts);
-    audit(db,org,'import.completed','source_report',report_id,{kind:x.kind,imported,duplicates,errors,conflicts});
+    audit(db,org,'import.completed','source_report',report_id,{kind:x.kind,imported,duplicates,errors,conflicts},actor);
     return {report_id,already_imported:false,imported,duplicates,errors,conflicts};
   });
 }
@@ -116,7 +116,7 @@ export function addAllocation(db:DB,org:string,paymentId:string,obligationId:str
   return allocId;
 }
 function issueKey(type:string,oid?:string,pid?:string,source?:string){return [type,oid||'',pid||'',source||''].join(':');}
-export function reconcile(db:DB,org=DEMO_ORG){
+export function reconcile(db:DB,org=DEMO_ORG,actor='Demo Reviewer'){
   return transaction(db,()=>{
     const obls=obligations(db,org),pays=payments(db,org),allocs=allocations(db,org);
     const runId=id('recon'),asof=new Date().toISOString().slice(0,10);
@@ -167,7 +167,7 @@ export function reconcile(db:DB,org=DEMO_ORG){
     for(const r of unmapped)emit('uncertain_identity',`Source row ${r.row_index}: ${r.validation_error}. No financial record was created.`,0,undefined,undefined,r.id,[r.row_fingerprint]);
     const conflicts=rows(db,'SELECT c.*,s.row_fingerprint FROM import_conflicts c JOIN source_rows s ON s.id=c.source_row_id WHERE c.org_id=? AND c.status=?',org,'pending');
     for(const c of conflicts)emit('conflicting_source_key',`Source key ${c.source_key} was reused with different contents; correction requires review.`,0,undefined,undefined,c.source_row_id,[c.row_fingerprint]);
-    audit(db,org,'reconciliation.completed','reconciliation_run',runId,{rule_version:RULE_VERSION,exceptions:issueCount,candidates:candidates.length});
+    audit(db,org,'reconciliation.completed','reconciliation_run',runId,{rule_version:RULE_VERSION,exceptions:issueCount,candidates:candidates.length},actor);
     return {run_id:runId,exceptions:issueCount,candidates:candidates.length};
   });
 }
@@ -207,14 +207,14 @@ export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed
     return {id:exceptionId,status};
   });
 }
-export function addAlias(db:DB,propertyId:string,alias:string,org=DEMO_ORG){
+export function addAlias(db:DB,propertyId:string,alias:string,org=DEMO_ORG,actor='Demo Reviewer'){
   const p=one(db,'SELECT * FROM properties WHERE id=? AND org_id=?',propertyId,org);
   if(!p)throw new DomainError('Property not found',404);if(!alias.trim()||alias.length>120)throw new DomainError('Invalid alias');
   const matches=propResolve(db,org,alias);
   if(matches.reason==='Ambiguous property identity')throw new DomainError('Alias collides with an ambiguous address',409);
   if(matches.id && matches.id!==propertyId)throw new DomainError('Alias already resolves to another property',409);
   try {run(db,'INSERT INTO aliases VALUES (?,?,?,?,?)',id('alias'),org,propertyId,alias.trim(),1);}catch(e){throw new DomainError('Alias already exists',409);}
-  audit(db,org,'property.alias_added','property',propertyId,{alias});return {property_id:propertyId,alias};
+  audit(db,org,'property.alias_added','property',propertyId,{alias},actor);return {property_id:propertyId,alias};
 }
 export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
   const currentRun=one(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',org);
