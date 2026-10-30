@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createDB,DEMO_ORG,OTHER_ORG,run} from '../src/db';
+import {createDB,DEMO_ORG,OTHER_ORG,run,sha} from '../src/db';
 import {seed} from '../src/seed';
 import {createApp} from '../src/server';
 import {createUser,authenticate,principalFromToken} from '../src/auth';
@@ -16,7 +16,7 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
  createUser(db,'finance-reviewer','Finance-Reviewer-Password-123','reviewer');
  createUser(db,'read-only','Read-Only-Password-123','viewer');
  createUser(db,'outside-user','Outside-User-Password-123','reviewer',OTHER_ORG);
- run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','PrivateSystem','private.csv','2026-10-20','USD','sha-other','2026-10-20T00:00:00Z','secret,private');
+ run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','PrivateSystem','private.csv','2026-10-20','USD',sha('secret,private'),'2026-10-20T00:00:00Z','secret,private');
  const server=createApp(db);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  const address=server.address();if(!address||typeof address==='string')throw Error('No bound address');const port=address.port;const base=`http://127.0.0.1:${port}`;
  try{
