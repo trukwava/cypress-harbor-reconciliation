@@ -105,6 +105,13 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         pack = json.loads(pack_path.read_text(encoding="utf-8"))
         assert pack["manifest"]["selected_run"] == new_run
         assert len(pack["original_obligations"]) == 41
+        with page.expect_download() as csv_event:
+            page.locator('a[href="/api/export/exceptions.csv?run=' + new_run + '"]').first.click()
+        csv_out = work / "exceptions.csv"
+        csv_event.value.save_as(csv_out)
+        csv_body = csv_out.read_text(encoding="utf-8")
+        assert '"run_id","exception_id"' in csv_body
+        assert new_run in csv_body
         page.locator('[data-select-run="' + first_run + '"]').click()
         page.locator("#alert").filter(has_text="Viewing selected run").wait_for(state="visible")
         historical = state(first_run)
