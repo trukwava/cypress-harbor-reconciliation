@@ -64,4 +64,4 @@ The SQLite database persists to `data/reconciliation.sqlite` by default. The **R
 - [ ] Institutional connectors, approvals, and compliance review
 - [ ] Finance-reviewer shadow pilot with actual (authorized) records
 
-See [docs/PILOT.md](docs/PILOT.md) for a safe next-stage validation plan.
+See [docs/SECURITY.md](docs/SECURITY.md) for the explicit local-demo security boundary and [docs/PILOT.md](docs/PILOT.md) for a safe next-stage validation plan.

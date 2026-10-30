@@ -49,6 +49,66 @@ export function createDB(filename = ':memory:'): DB {
     SELECT RAISE(ABORT,'obligation over-allocation') WHERE NEW.amount_minor+(SELECT COALESCE(SUM(amount_minor),0) FROM allocations WHERE obligation_id=NEW.obligation_id AND id<>OLD.id)>(SELECT amount_minor FROM obligations WHERE id=NEW.obligation_id);
   END;
   `);
+  // FKs enforce existence; these guards additionally enforce same-tenant parentage.
+  // Run on inserts *and* updates, so edited foreign keys cannot cross tenants.
+  const scopedReferences:Record<string,string[]>={
+  "properties": [
+    "EXISTS(SELECT 1 FROM entities e WHERE e.id=NEW.entity_id AND e.org_id=NEW.org_id)"
+  ],
+  "external_accounts": [
+    "EXISTS(SELECT 1 FROM properties p WHERE p.id=NEW.property_id AND p.org_id=NEW.org_id)"
+  ],
+  "aliases": [
+    "EXISTS(SELECT 1 FROM properties p WHERE p.id=NEW.property_id AND p.org_id=NEW.org_id)"
+  ],
+  "import_batches": [
+    "EXISTS(SELECT 1 FROM source_reports r WHERE r.id=NEW.report_id AND r.org_id=NEW.org_id)"
+  ],
+  "source_rows": [
+    "EXISTS(SELECT 1 FROM source_reports r WHERE r.id=NEW.report_id AND r.org_id=NEW.org_id AND r.kind=NEW.kind)"
+  ],
+  "obligations": [
+    "EXISTS(SELECT 1 FROM properties p WHERE p.id=NEW.property_id AND p.org_id=NEW.org_id)",
+    "EXISTS(SELECT 1 FROM source_reports r WHERE r.id=NEW.report_id AND r.org_id=NEW.org_id AND r.kind='obligation')",
+    "EXISTS(SELECT 1 FROM source_rows s WHERE s.id=NEW.source_row_id AND s.org_id=NEW.org_id AND s.report_id=NEW.report_id AND s.kind='obligation')"
+  ],
+  "payments": [
+    "EXISTS(SELECT 1 FROM properties p WHERE p.id=NEW.property_id AND p.org_id=NEW.org_id)",
+    "EXISTS(SELECT 1 FROM source_reports r WHERE r.id=NEW.report_id AND r.org_id=NEW.org_id AND r.kind='payment')",
+    "EXISTS(SELECT 1 FROM source_rows s WHERE s.id=NEW.source_row_id AND s.org_id=NEW.org_id AND s.report_id=NEW.report_id AND s.kind='payment')"
+  ],
+  "import_conflicts": [
+    "EXISTS(SELECT 1 FROM source_rows s WHERE s.id=NEW.source_row_id AND s.org_id=NEW.org_id AND s.kind=NEW.kind)",
+    "(NEW.kind='obligation' AND EXISTS(SELECT 1 FROM obligations o WHERE o.id=NEW.current_record_id AND o.org_id=NEW.org_id)) OR (NEW.kind='payment' AND EXISTS(SELECT 1 FROM payments p WHERE p.id=NEW.current_record_id AND p.org_id=NEW.org_id))"
+  ],
+  "run_snapshots": [
+    "EXISTS(SELECT 1 FROM reconciliation_runs r WHERE r.id=NEW.run_id AND r.org_id=NEW.org_id)"
+  ],
+  "match_candidates": [
+    "EXISTS(SELECT 1 FROM reconciliation_runs r WHERE r.id=NEW.run_id AND r.org_id=NEW.org_id)",
+    "EXISTS(SELECT 1 FROM obligations o JOIN payments p ON o.property_id=p.property_id AND o.currency=p.currency WHERE o.id=NEW.obligation_id AND p.id=NEW.payment_id AND o.org_id=NEW.org_id AND p.org_id=NEW.org_id)"
+  ],
+  "match_decisions": [
+    "EXISTS(SELECT 1 FROM match_candidates c WHERE c.id=NEW.candidate_id AND c.org_id=NEW.org_id)"
+  ],
+  "exceptions": [
+    "EXISTS(SELECT 1 FROM reconciliation_runs r WHERE r.id=NEW.run_id AND r.org_id=NEW.org_id)",
+    "(NEW.obligation_id IS NULL OR EXISTS(SELECT 1 FROM obligations o WHERE o.id=NEW.obligation_id AND o.org_id=NEW.org_id))",
+    "(NEW.payment_id IS NULL OR EXISTS(SELECT 1 FROM payments p WHERE p.id=NEW.payment_id AND p.org_id=NEW.org_id))",
+    "(NEW.source_row_id IS NULL OR EXISTS(SELECT 1 FROM source_rows s WHERE s.id=NEW.source_row_id AND s.org_id=NEW.org_id))"
+  ],
+  "resolutions": [
+    "EXISTS(SELECT 1 FROM exceptions e WHERE e.id=NEW.exception_id AND e.org_id=NEW.org_id)"
+  ]
+};
+  for(const [table,conditions] of Object.entries(scopedReferences)){
+    for(const operation of ['INSERT','UPDATE']){
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tenant_guard_${table}_${operation.toLowerCase()}
+        BEFORE ${operation} ON ${table}
+        WHEN NOT (${conditions.map(c=>`(${c})`).join(' AND ')})
+        BEGIN SELECT RAISE(ABORT,'cross-organization reference'); END;`);
+    }
+  }
   return db;
 }
 
