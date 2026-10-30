@@ -4,6 +4,10 @@ A **local, synthetic financial-operations demo** for a fictional affordable-hous
 
 This project is an original implementation inspired by the workflow described in the [Pursuit AssetFlow Lookbook](https://lookbook.pursuit.org/projects/assetflow). It does **not** reuse AssetFlow's code, real customer data, branding, or proprietary documents. Any reference claims belong to their original source and are not validation of this demo.
 
+## Repository publication status
+
+**This repository is being populated from a locally verified source bundle.** At this checkpoint, not all `src/`, `tests/`, `public/`, and `fixtures/` files have been committed, so a fresh clone of this repository is not yet runnable. The complete local source bundle is preserved separately; the instructions below apply once the remaining files are added. Do not interpret an incomplete repository as a deployed application.
+
 ## Run locally
 
 Requires **Node.js 22.16+** and npm. No external service credentials, Docker, or paid API is needed.
