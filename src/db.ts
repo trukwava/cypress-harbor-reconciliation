@@ -27,7 +27,7 @@ export function createDB(filename = ':memory:'): DB {
   CREATE TABLE IF NOT EXISTS allocations (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),payment_id TEXT NOT NULL REFERENCES payments(id),obligation_id TEXT NOT NULL REFERENCES obligations(id),amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,created_by TEXT NOT NULL,UNIQUE(org_id,payment_id,obligation_id));
   CREATE TABLE IF NOT EXISTS import_conflicts (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),kind TEXT NOT NULL,source_row_id TEXT NOT NULL REFERENCES source_rows(id),current_record_id TEXT NOT NULL,source_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')),created_at TEXT NOT NULL,decided_at TEXT,reviewer TEXT);
   CREATE TABLE IF NOT EXISTS reconciliation_runs (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),rule_version TEXT NOT NULL,created_at TEXT NOT NULL,as_of TEXT NOT NULL,obligation_count INTEGER NOT NULL,payment_count INTEGER NOT NULL);
-  CREATE TABLE IF NOT EXISTS run_snapshots (run_id TEXT PRIMARY KEY REFERENCES reconciliation_runs(id),org_id TEXT NOT NULL REFERENCES organizations(id),snapshot_json TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS run_snapshots (run_id TEXT PRIMARY KEY REFERENCES reconciliation_runs(id),org_id TEXT NOT NULL REFERENCES organizations(id),snapshot_json TEXT NOT NULL,snapshot_sha TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS match_candidates (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),run_id TEXT NOT NULL REFERENCES reconciliation_runs(id),obligation_id TEXT NOT NULL REFERENCES obligations(id),payment_id TEXT NOT NULL REFERENCES payments(id),basis TEXT NOT NULL,strength TEXT NOT NULL CHECK(strength IN ('explicit','suggested')),evidence_hash TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'proposed' CHECK(status IN ('proposed','accepted','rejected')),UNIQUE(run_id,obligation_id,payment_id));
   CREATE TABLE IF NOT EXISTS match_decisions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),candidate_id TEXT NOT NULL REFERENCES match_candidates(id),decision TEXT NOT NULL CHECK(decision IN ('accepted','rejected')),allocation_minor INTEGER NOT NULL DEFAULT 0,reviewer TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),run_id TEXT NOT NULL REFERENCES reconciliation_runs(id),issue_key TEXT NOT NULL,kind TEXT NOT NULL,obligation_id TEXT REFERENCES obligations(id),payment_id TEXT REFERENCES payments(id),source_row_id TEXT REFERENCES source_rows(id),amount_minor INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL,basis_hash TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','reviewed','info_requested')),owner TEXT NOT NULL DEFAULT 'Unassigned',note TEXT NOT NULL DEFAULT '',reopened_from TEXT,created_at TEXT NOT NULL,UNIQUE(run_id,issue_key));
@@ -112,6 +112,20 @@ export function createDB(filename = ':memory:'): DB {
         WHEN NOT (${conditions.map(c=>`(${c})`).join(' AND ')})
         BEGIN SELECT RAISE(ABORT,'cross-organization reference'); END;`);
     }
+  }
+  // Existing demo databases may predate snapshot fingerprints. Establish a
+  // one-time baseline for those legacy rows, but never silently repair a missing
+  // or mismatched checksum after the migration has already occurred.
+  const snapshotColumns=db.prepare('PRAGMA table_info(run_snapshots)').all() as any[];
+  if(!snapshotColumns.some(c=>c.name==='snapshot_sha')){
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      db.exec('ALTER TABLE run_snapshots ADD COLUMN snapshot_sha TEXT');
+      const legacy=db.prepare('SELECT run_id,snapshot_json FROM run_snapshots').all() as any[];
+      const save=db.prepare('UPDATE run_snapshots SET snapshot_sha=? WHERE run_id=?');
+      for(const row of legacy)save.run(sha(row.snapshot_json),row.run_id);
+      db.exec('COMMIT');
+    }catch(error){db.exec('ROLLBACK');throw error;}
   }
   return db;
 }
