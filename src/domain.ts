@@ -85,7 +85,7 @@ export function commitImport(db:DB,x:ReportInput,org=DEMO_ORG){
     return {report_id,already_imported:false,imported,duplicates,errors,conflicts};
   });
 }
-export function acceptConflict(db:DB,conflictId:string,decision:'accepted'|'rejected',org=DEMO_ORG){
+export function acceptConflict(db:DB,conflictId:string,decision:'accepted'|'rejected',org=DEMO_ORG,actor='Demo Reviewer'){
   return transaction(db,()=>{
     const c=one(db,'SELECT c.*,r.report_id,r.normalized_json,r.row_fingerprint FROM import_conflicts c JOIN source_rows r ON r.id=c.source_row_id WHERE c.id=? AND c.org_id=?',conflictId,org);
     if(!c)throw new DomainError('Conflict not found',404);if(c.status!=='pending')throw new DomainError('Conflict already decided',409);
@@ -99,8 +99,8 @@ export function acceptConflict(db:DB,conflictId:string,decision:'accepted'|'reje
       if(c.kind==='obligation')run(db,'UPDATE obligations SET property_id=?,invoice_ref=?,amount_minor=?,reported_due_minor=?,currency=?,due_date=?,report_id=?,source_row_id=?,content_sha=? WHERE id=? AND org_id=?',n.property_id,n.invoice_ref,n.amount_minor,n.reported_due_minor,n.currency,n.due_date,c.report_id,c.source_row_id,c.row_fingerprint,target.id,org);
       else run(db,'UPDATE payments SET property_id=?,invoice_ref=?,amount_minor=?,currency=?,transaction_date=?,posted_date=?,payment_type=?,report_id=?,source_row_id=?,content_sha=? WHERE id=? AND org_id=?',n.property_id,n.invoice_ref,n.amount_minor,n.currency,n.transaction_date,n.posted_date,n.payment_type,c.report_id,c.source_row_id,c.row_fingerprint,target.id,org);
     }
-    run(db,'UPDATE import_conflicts SET status=?,decided_at=?,reviewer=? WHERE id=? AND org_id=?',decision,now(),'Demo Reviewer',conflictId,org);
-    audit(db,org,'conflict.'+decision,'import_conflict',conflictId);
+    run(db,'UPDATE import_conflicts SET status=?,decided_at=?,reviewer=? WHERE id=? AND org_id=?',decision,now(),actor,conflictId,org);
+    audit(db,org,'conflict.'+decision,'import_conflict',conflictId,{},actor);
     return {id:conflictId,status:decision};
   });
 }
@@ -171,7 +171,7 @@ export function reconcile(db:DB,org=DEMO_ORG){
     return {run_id:runId,exceptions:issueCount,candidates:candidates.length};
   });
 }
-export function decideMatch(db:DB,candidateId:string,decision:'accepted'|'rejected',note:string,amountMinor:number|undefined,org=DEMO_ORG){
+export function decideMatch(db:DB,candidateId:string,decision:'accepted'|'rejected',note:string,amountMinor:number|undefined,org=DEMO_ORG,actor='Demo Reviewer'){
   return transaction(db,()=>{
     const c=one(db,'SELECT c.*,p.amount_minor pay_amount,o.amount_minor obl_amount FROM match_candidates c JOIN payments p ON c.payment_id=p.id JOIN obligations o ON c.obligation_id=o.id WHERE c.id=? AND c.org_id=?',candidateId,org);
     if(!c)throw new DomainError('Candidate not found',404);
@@ -186,15 +186,15 @@ export function decideMatch(db:DB,candidateId:string,decision:'accepted'|'reject
       const oAllocated=one(db,'SELECT COALESCE(SUM(amount_minor),0) n FROM allocations WHERE obligation_id=?',c.obligation_id).n;
       amount=amountMinor===undefined?Math.min(c.pay_amount-pAllocated,c.obl_amount-oAllocated):amountMinor;
       if(!Number.isSafeInteger(amount)||amount<=0)throw new DomainError('No unallocated amount remaining',409);
-      addAllocation(db,org,c.payment_id,c.obligation_id,amount);
+      addAllocation(db,org,c.payment_id,c.obligation_id,amount,actor);
     }
     run(db,'UPDATE match_candidates SET status=? WHERE id=? AND org_id=?',decision,candidateId,org);
-    run(db,'INSERT INTO match_decisions VALUES (?,?,?,?,?,?,?,?)',id('decision'),org,candidateId,decision,amount,'Demo Reviewer',String(note||'').slice(0,1000),now());
-    audit(db,org,'match.'+decision,'match_candidate',candidateId,{allocation_minor:amount});
+    run(db,'INSERT INTO match_decisions VALUES (?,?,?,?,?,?,?,?)',id('decision'),org,candidateId,decision,amount,actor,String(note||'').slice(0,1000),now());
+    audit(db,org,'match.'+decision,'match_candidate',candidateId,{allocation_minor:amount},actor);
     return {id:candidateId,decision,allocation_minor:amount};
   });
 }
-export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed'|'info_requested',owner:string,note:string,org=DEMO_ORG){
+export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed'|'info_requested',owner:string,note:string,org=DEMO_ORG,actor='Demo Reviewer'){
   return transaction(db,()=>{
     const target=one(db,'SELECT id,run_id FROM exceptions WHERE id=? AND org_id=?',exceptionId,org);
     if(!target)throw new DomainError('Exception not found',404);
@@ -202,8 +202,8 @@ export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed
     if(target.run_id!==current?.id)throw new DomainError('Historical runs are read-only',409);
     if(owner.length>80||note.length>2000)throw new DomainError('Owner or note too long');
     run(db,'UPDATE exceptions SET status=?,owner=?,note=? WHERE id=? AND org_id=?',status,owner.trim()||'Unassigned',note,exceptionId,org);
-    run(db,'INSERT INTO resolutions VALUES (?,?,?,?,?,?,?)',id('resolution'),org,exceptionId,status,'Demo Reviewer',note,now());
-    audit(db,org,'exception.'+status,'exception',exceptionId,{owner});
+    run(db,'INSERT INTO resolutions VALUES (?,?,?,?,?,?,?)',id('resolution'),org,exceptionId,status,actor,note,now());
+    audit(db,org,'exception.'+status,'exception',exceptionId,{owner},actor);
     return {id:exceptionId,status};
   });
 }
