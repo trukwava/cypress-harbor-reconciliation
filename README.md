@@ -4,10 +4,6 @@ A **local, synthetic financial-operations demo** for a fictional affordable-hous
 
 This project is an original implementation inspired by the workflow described in the [Pursuit AssetFlow Lookbook](https://lookbook.pursuit.org/projects/assetflow). It does **not** reuse AssetFlow's code, real customer data, branding, or proprietary documents. Any reference claims belong to their original source and are not validation of this demo.
 
-## Repository publication status
-
-**This repository is being populated from a locally verified source bundle.** At this checkpoint, not all `src/`, `tests/`, `public/`, and `fixtures/` files have been committed, so a fresh clone of this repository is not yet runnable. The complete local source bundle is preserved separately; the instructions below apply once the remaining files are added. Do not interpret an incomplete repository as a deployed application.
-
 ## Run locally
 
 Requires **Node.js 22.16+** and npm. No external service credentials, Docker, or paid API is needed.
@@ -42,7 +38,7 @@ It cannot authenticate real users, connect to a bank, pay bills, update accounti
 npm test
 ```
 
-The suite includes allocation and property/organization boundary tests, CSV malformed-input handling, duplicate imports, correction review, reopen conditions, historical pack consistency, HTTP source access controls, and reload persistence. At publication preparation, **14 tests passed locally** on Node 22.16; check current CI or rerun them rather than assuming future revisions inherit that result.
+The suite includes allocation and property/organization boundary tests, CSV malformed-input handling, duplicate imports, correction review, reopen conditions, historical pack consistency, HTTP source access controls, and reload persistence. On October 30, 2026, **14 tests passed locally** on Node 22.16; check current CI or rerun them rather than assuming future revisions inherit that result.
 
 ## Design decisions
 
