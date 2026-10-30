@@ -69,6 +69,15 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         page.locator("#exception-status").select_option("reviewed")
         page.locator("#exception-owner").fill("Browser Finance Reviewer")
         page.locator("#exception-note").fill("Inspected source obligations and payment evidence")
+        # A simulated transient error must not throw away the typed disposition.
+        page.route("**/api/exceptions/*/review",
+                   lambda route: route.fulfill(status=503, content_type="application/json",
+                                               body='{"error":"Temporary review outage"}'),
+                   times=1)
+        dialog.get_by_role("button", name="Save review and audit event").click()
+        page.locator("#alert").filter(has_text="Temporary review outage").wait_for(state="visible")
+        assert dialog.is_visible()
+        assert page.locator("#exception-note").input_value() == "Inspected source obligations and payment evidence"
         dialog.get_by_role("button", name="Save review and audit event").click()
         dialog.wait_for(state="hidden")
         assert next(e for e in state()["exceptions"] if e["id"] == target["id"])["status"] == "reviewed"
@@ -85,6 +94,15 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         page.get_by_role("button", name="Preview & validate").click()
         page.locator("#preview-panel").get_by_text("Import preview", exact=False).wait_for()
         assert "BROWSER-OBL-1" in page.locator("#preview-panel").inner_text()
+        # Preserve the preview and selected CSV if the server rejects one commit.
+        page.route("**/api/import/commit",
+                   lambda route: route.fulfill(status=503, content_type="application/json",
+                                               body='{"error":"Temporary import outage"}'),
+                   times=1)
+        page.locator("#commit-import").click()
+        page.locator("#alert").filter(has_text="Temporary import outage").wait_for(state="visible")
+        assert "BROWSER-OBL-1" in page.locator("#preview-panel").inner_text()
+        assert page.locator("#commit-import").is_enabled()
         page.locator("#commit-import").click()
         page.locator("#alert").filter(has_text="Report preserved").wait_for(state="visible")
         # Import preserves the record, but the last reconciliation view stays frozen.
