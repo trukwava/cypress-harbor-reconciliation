@@ -86,7 +86,7 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         page.locator("#preview-panel").get_by_text("Import preview", exact=False).wait_for()
         assert "BROWSER-OBL-1" in page.locator("#preview-panel").inner_text()
         page.locator("#commit-import").click()
-        page.locator("#alert").get_by_text("Report preserved", exact=False).wait_for()
+        page.locator("#alert").filter(has_text="Report preserved").wait_for(state="visible")
         # Import preserves the record, but the last reconciliation view stays frozen.
         imported_state = state()
         assert len(imported_state["obligations"]) == 40
@@ -94,7 +94,7 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
 
         # Fresh run and downloadable evidence pack; prior run remains frozen.
         page.locator("#run-reconcile").click()
-        page.locator("#alert").get_by_text("Reconciliation complete", exact=False).wait_for()
+        page.locator("#alert").filter(has_text="Reconciliation complete").wait_for(state="visible")
         new_run = state()["latest"]["id"]
         assert new_run != first_run
         page.locator('[data-page="history"]').click()
@@ -106,7 +106,7 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         assert pack["manifest"]["selected_run"] == new_run
         assert len(pack["original_obligations"]) == 41
         page.locator('[data-select-run="' + first_run + '"]').click()
-        page.locator("#alert").get_by_text("Viewing selected run", exact=False).wait_for()
+        page.locator("#alert").filter(has_text="Viewing selected run").wait_for(state="visible")
         historical = state(first_run)
         assert len(historical["obligations"]) == 40
         assert historical["metrics"]["original_obligations_minor"] == initial["metrics"]["original_obligations_minor"]
