@@ -6,7 +6,7 @@ const pretty=s=>String(s||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCa
 const short=s=>s?String(s).slice(0,8)+'…':'—';
 let principal=null;let state=null,page='queue',selectedRun='',search='',filter='all',preview=null,currentUpload=null,busy=false;
 async function api(path,payload){const r=await fetch(path,payload===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});let data;try{data=await r.json();}catch{throw Error(`Unexpected server response (${r.status})`)}if(!r.ok)throw Error(data.error||`Request failed (${r.status})`);return data;}
-function showLogin(message=''){principal=null;state=null;$('#workspace').classList.add('hidden');$('#login-view').classList.remove('hidden');$('#login-error').textContent=message;$('#login-username').focus();}
+function showLogin(message=''){principal=null;state=null;selectedRun='';search='';filter='all';preview=null;currentUpload=null;setPage('queue');$('#workspace').classList.add('hidden');$('#login-view').classList.remove('hidden');$('#login-error').textContent=message;$('#login-username').focus();}
 function showWorkspace(user){principal=user;$('#workspace').classList.remove('hidden');$('#login-view').classList.add('hidden');$('#identity-label').textContent=user.username+' · '+user.role;$('#manage-users').classList.toggle('hidden',user.role!=='admin');$('#run-reconcile').classList.toggle('hidden',user.role!=='admin');}
 function notify(message,isError=false){const el=$('#alert');el.textContent=message;el.className='alert'+(isError?' error':'');window.scrollTo({top:0,behavior:'smooth'});}
 function clearAlert(){$('#alert').classList.add('hidden')}
