@@ -124,7 +124,8 @@ export function reconcile(db:DB,org=DEMO_ORG,actor='Demo Reviewer'){
     const allocByObl=new Map<string,number>(),allocByPay=new Map<string,number>();
     for(const a of allocs){allocByObl.set(a.obligation_id,(allocByObl.get(a.obligation_id)||0)+a.amount_minor);allocByPay.set(a.payment_id,(allocByPay.get(a.payment_id)||0)+a.amount_minor);}
     const registry=rows(db,`SELECT p.*,e.name entity_name,(SELECT group_concat(alias, ', ') FROM aliases a WHERE a.property_id=p.id) aliases,(SELECT group_concat(source_system||': '||account_ref,'; ') FROM external_accounts a WHERE a.property_id=p.id) accounts FROM properties p JOIN entities e ON p.entity_id=e.id WHERE p.org_id=? ORDER BY p.id`,org);
-    run(db,'INSERT INTO run_snapshots VALUES (?,?,?)',runId,org,JSON.stringify({obligations:obls,payments:pays,allocations:allocs,properties:registry}));
+    const frozenJson=JSON.stringify({obligations:obls,payments:pays,allocations:allocs,properties:registry});
+    run(db,'INSERT INTO run_snapshots (run_id,org_id,snapshot_json,snapshot_sha) VALUES (?,?,?,?)',runId,org,frozenJson,sha(frozenJson));
     const candidates:any[]=[];
     for(const p of pays){for(const o of obls){
       if(p.property_id!==o.property_id||p.currency!==o.currency||p.invoice_ref!==o.invoice_ref)continue;
@@ -220,7 +221,9 @@ export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
   const currentRun=one(db,'SELECT * FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',org);
   const latest=selectedRun?one(db,'SELECT * FROM reconciliation_runs WHERE org_id=? AND id=?',org,selectedRun):currentRun;
   if(selectedRun&&!latest)throw new DomainError('Run not found',404);
-  const frozen=latest?one(db,'SELECT snapshot_json FROM run_snapshots WHERE run_id=? AND org_id=?',latest.id,org):null;
+  const frozen=latest?one(db,'SELECT snapshot_json,snapshot_sha FROM run_snapshots WHERE run_id=? AND org_id=?',latest.id,org):null;
+  if(frozen && (!frozen.snapshot_sha || sha(frozen.snapshot_json)!==frozen.snapshot_sha))
+    throw new DomainError('Frozen reconciliation snapshot failed SHA-256 integrity check',409);
   const snap=frozen?JSON.parse(frozen.snapshot_json):null;
   const obls=snap?snap.obligations:obligations(db,org),pays=snap?snap.payments:payments(db,org),allocs=snap?snap.allocations:allocations(db,org);
   const withAlloc=obls.map(o=>({...o,allocated_minor:allocs.filter(a=>a.obligation_id===o.id).reduce((s,a)=>s+a.amount_minor,0),remaining_minor:o.amount_minor-allocs.filter(a=>a.obligation_id===o.id).reduce((s,a)=>s+a.amount_minor,0)}));
@@ -293,5 +296,5 @@ export function exportPack(db:DB,org=DEMO_ORG,runId?:string){
     if(actual!==report.raw_sha)throw new DomainError('Stored source CSV failed SHA-256 integrity check',409);
   }
   const relevantIds=new Set([s.latest?.id,...sourceReports.map(r=>r.id),...s.exceptions.map(e=>e.id),...s.candidates.map(c=>c.id),...s.allocations.map(a=>a.id)]);
-  return {manifest:{generated_at:now(),organization:s.organization.name,mode:'synthetic-demo',source_integrity:'SHA-256 verified at export',verified_source_reports:sourceReports.length,rule_version:s.latest?.rule_version||RULE_VERSION,selected_run:s.latest?.id||null,disclaimer:'Reconciled explanatory balances do not alter source balances and do not establish confirmed debt.',allocation_timing:'Totals are frozen at selected reconciliation run; decisions made afterward require another run.'},source_reports:sourceReports,property_registry:s.properties,source_rows:sourceRows.map(r=>({...r,raw:JSON.parse(r.raw_json),normalized:JSON.parse(r.normalized_json)})),original_obligations:s.obligations,original_payments:s.payments,allocations:s.allocations,candidates:s.candidates,exceptions:s.exceptions,resolutions:rows(db,'SELECT * FROM resolutions WHERE org_id=?',org).filter(r=>s.exceptions.some(e=>e.id===r.exception_id)),review_decisions:rows(db,'SELECT * FROM match_decisions WHERE org_id=?',org).filter(d=>s.candidates.some(c=>c.id===d.candidate_id)),metrics:s.metrics,audit_events:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC',org).filter(e=>relevantIds.has(e.object_id))};
+  return {manifest:{generated_at:now(),organization:s.organization.name,mode:'synthetic-demo',source_integrity:'SHA-256 verified at export',run_snapshot_integrity:'SHA-256 verified at read',verified_source_reports:sourceReports.length,rule_version:s.latest?.rule_version||RULE_VERSION,selected_run:s.latest?.id||null,disclaimer:'Reconciled explanatory balances do not alter source balances and do not establish confirmed debt.',allocation_timing:'Totals are frozen at selected reconciliation run; decisions made afterward require another run.'},source_reports:sourceReports,property_registry:s.properties,source_rows:sourceRows.map(r=>({...r,raw:JSON.parse(r.raw_json),normalized:JSON.parse(r.normalized_json)})),original_obligations:s.obligations,original_payments:s.payments,allocations:s.allocations,candidates:s.candidates,exceptions:s.exceptions,resolutions:rows(db,'SELECT * FROM resolutions WHERE org_id=?',org).filter(r=>s.exceptions.some(e=>e.id===r.exception_id)),review_decisions:rows(db,'SELECT * FROM match_decisions WHERE org_id=?',org).filter(d=>s.candidates.some(c=>c.id===d.candidate_id)),metrics:s.metrics,audit_events:rows(db,'SELECT * FROM audit_events WHERE org_id=? ORDER BY created_at DESC',org).filter(e=>relevantIds.has(e.object_id))};
 }
