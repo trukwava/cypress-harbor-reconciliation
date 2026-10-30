@@ -201,6 +201,39 @@ test('historical match candidates retain frozen available amounts after subseque
 });
 
 
+test('historical invoice identities, dates and source reports remain frozen after approved corrections',()=>{
+  const db=setup(),old=state(db),oldRun=old.latest.id;
+  const originalException=old.exceptions.find((e:any)=>e.kind==='paid_elsewhere_still_due'&&e.obligation_key==='OBL-001');
+  const originalCandidate=old.candidates.find((c:any)=>c.obligation_key==='OBL-003');
+  assert.ok(originalException&&originalCandidate);
+  const csv=[
+    'obligation_key,property_ref,invoice_ref,amount,reported_due,due_date,currency',
+    'OBL-001,CHH-P01,CHANGED-101,1000.00,1000.00,2026-12-20,USD',
+    'OBL-003,CHH-P03,CHANGED-1002,384.00,384.00,2026-12-20,USD'
+  ].join('\n')+'\n';
+  const imported=commitImport(db,{kind:'obligation',filename:'updated-identities.csv',csv,as_of:'2026-10-25',source_system:'MunicipalLedger',currency:'USD'});
+  assert.equal(imported.conflicts,2);
+  for(const conflict of rows(db,"SELECT id FROM import_conflicts WHERE org_id=? AND status='pending'",DEMO_ORG))
+    acceptConflict(db,conflict.id,'accepted');
+  // Only a new reconciliation produces a new snapshot; older runs stay frozen.
+  reconcile(db);
+  const current=state(db);
+  assert.equal(current.obligations.find((o:any)=>o.source_key==='OBL-001').invoice_ref,'CHANGED-101');
+  assert.equal(current.obligations.find((o:any)=>o.source_key==='OBL-003').invoice_ref,'CHANGED-1002');
+  const historical=state(db,DEMO_ORG,oldRun);
+  const exception=historical.exceptions.find((e:any)=>e.id===originalException.id);
+  const candidate=historical.candidates.find((c:any)=>c.id===originalCandidate.id);
+  assert.equal(exception.invoice_ref,originalException.invoice_ref);
+  assert.equal(exception.due_date,originalException.due_date);
+  assert.equal(exception.obligation_report,originalException.obligation_report);
+  assert.equal(candidate.invoice_ref,originalCandidate.invoice_ref);
+  assert.equal(candidate.obligation_key,originalCandidate.obligation_key);
+  const pack=exportPack(db,DEMO_ORG,oldRun);
+  assert.equal(pack.exceptions.find((e:any)=>e.id===originalException.id).invoice_ref,originalException.invoice_ref);
+  assert.equal(pack.candidates.find((c:any)=>c.id===originalCandidate.id).invoice_ref,originalCandidate.invoice_ref);
+  db.close();
+});
+
 test('reconciliation pack includes independently verifiable CSV evidence and refuses tampered reports',()=>{
   const db=setup(),pack=exportPack(db,DEMO_ORG);
   assert.ok(pack.source_reports.length>=2);
