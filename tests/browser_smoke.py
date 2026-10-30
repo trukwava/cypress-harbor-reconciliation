@@ -109,12 +109,14 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         imported_state = state()
         assert len(imported_state["obligations"]) == 40
         assert any(r["filename"] == "browser_obligation.csv" for r in imported_state["reports"])
+        page.locator("#content .notice[role=status]").filter(has_text="Reconciliation required").wait_for(state="visible")
 
         # Fresh run and downloadable evidence pack; prior run remains frozen.
         page.locator("#run-reconcile").click()
         page.locator("#alert").filter(has_text="Reconciliation complete").wait_for(state="visible")
         new_run = state()["latest"]["id"]
         assert new_run != first_run
+        assert page.locator("#content .notice[role=status]").filter(has_text="Reconciliation required").count() == 0
         page.locator('[data-page="history"]').click()
         with page.expect_download() as download_event:
             page.locator('a[href="/api/export?run=' + new_run + '"]').first.click()
