@@ -118,10 +118,10 @@ export function createApp(db:DB){
         if(m==='POST'){
           const payload=await body(req);
           if(url.pathname==='/api/import/preview'){requireRole(actor,'reviewer','admin');return send(res,200,previewImport(db,payload,org));}
-          if(url.pathname==='/api/import/commit'){requireRole(actor,'admin');const result=commitImport(db,payload,org);audit(db,org,'actor.import','source_report',result.report_id,{},actor.username);return send(res,200,result);}
-          if(url.pathname==='/api/reconcile'){requireRole(actor,'admin');const result=reconcile(db,org);audit(db,org,'actor.reconcile','reconciliation_run',result.run_id||'latest',{},actor.username);return send(res,200,result);}
+          if(url.pathname==='/api/import/commit'){requireRole(actor,'admin');const result=commitImport(db,payload,org,actor.username);return send(res,200,result);}
+          if(url.pathname==='/api/reconcile'){requireRole(actor,'admin');const result=reconcile(db,org,actor.username);return send(res,200,result);}
           if(url.pathname==='/api/demo/reset'){requireRole(actor,'admin');if(org!==DEMO_ORG)throw new DomainError('Reset restricted to Cypress Harbor demo',403);const result=resetDemo(db);audit(db,org,'actor.reset','organization',org,{},actor.username);return send(res,200,result);}
-          if(url.pathname==='/api/aliases'){requireRole(actor,'admin');const result=addAlias(db,String(payload.property_id||''),String(payload.alias||''),org);audit(db,org,'actor.alias','property',result.property_id,{},actor.username);return send(res,200,result);}
+          if(url.pathname==='/api/aliases'){requireRole(actor,'admin');const result=addAlias(db,String(payload.property_id||''),String(payload.alias||''),org,actor.username);return send(res,200,result);}
           if(/^\/api\/matches\/[^/]+\/decide$/.test(url.pathname)){
             requireRole(actor,'reviewer','admin');if(!['accepted','rejected'].includes(payload.decision))throw new DomainError('Decision must be accepted or rejected');
             const result=decideMatch(db,url.pathname.split('/')[3],payload.decision,String(payload.note||''),payload.amount_minor,org,actor.username);return send(res,200,result);

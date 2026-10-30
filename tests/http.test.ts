@@ -72,6 +72,7 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   assert.equal(reviewed.status,200);
   assert.equal(db.prepare('SELECT reviewer FROM resolutions WHERE exception_id=? ORDER BY rowid DESC LIMIT 1').get(exc.id)?.reviewer,'finance-reviewer');
   const rr=await req('/api/reconcile',{});assert.equal(rr.status,200);
+  assert.equal(db.prepare("SELECT actor FROM audit_events WHERE action='reconciliation.completed' AND object_id=?").get(rr.body.run_id)?.actor,'demo-admin');
   const latest=await req('/api/state');const successor=latest.body.exceptions.find((e:any)=>e.issue_key===exc.issue_key);
   assert.equal(successor.status,'reviewed');assert.equal(successor.owner,'M. Finance');
   const pack=await req('/api/export');assert.equal(pack.status,200);
