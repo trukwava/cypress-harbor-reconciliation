@@ -12,6 +12,9 @@ export function createDB(filename = ':memory:'): DB {
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   db.exec(`
   CREATE TABLE IF NOT EXISTS organizations (id TEXT PRIMARY KEY,name TEXT NOT NULL,is_demo INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS local_users (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),username TEXT NOT NULL UNIQUE,role TEXT NOT NULL CHECK(role IN ('viewer','reviewer','admin')),salt TEXT NOT NULL,password_hash TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS local_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES local_users(id),org_id TEXT NOT NULL REFERENCES organizations(id),created_at TEXT NOT NULL,expires_at TEXT NOT NULL,revoked_at TEXT);
+  CREATE INDEX IF NOT EXISTS idx_local_sessions_user ON local_sessions(user_id,expires_at);
   CREATE TABLE IF NOT EXISTS entities (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),name TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),entity_id TEXT NOT NULL REFERENCES entities(id),address TEXT NOT NULL,bbl TEXT);
   CREATE TABLE IF NOT EXISTS external_accounts (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),property_id TEXT NOT NULL REFERENCES properties(id),source_system TEXT NOT NULL,account_ref TEXT NOT NULL,UNIQUE(org_id,source_system,account_ref));
@@ -52,6 +55,7 @@ export function createDB(filename = ':memory:'): DB {
   // FKs enforce existence; these guards additionally enforce same-tenant parentage.
   // Run on inserts *and* updates, so edited foreign keys cannot cross tenants.
   const scopedReferences:Record<string,string[]>={
+  "local_sessions": ["EXISTS(SELECT 1 FROM local_users u WHERE u.id=NEW.user_id AND u.org_id=NEW.org_id)"],
   "properties": [
     "EXISTS(SELECT 1 FROM entities e WHERE e.id=NEW.entity_id AND e.org_id=NEW.org_id)"
   ],
