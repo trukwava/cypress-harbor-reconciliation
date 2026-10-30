@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createDB,DEMO_ORG,OTHER_ORG,run} from '../src/db';
+import {createDB,DEMO_ORG,OTHER_ORG,run,sha} from '../src/db';
 import {seed} from '../src/seed';
 import {createApp} from '../src/server';
 import {createUser,authenticate,principalFromToken} from '../src/auth';
@@ -16,7 +16,7 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
  createUser(db,'finance-reviewer','Finance-Reviewer-Password-123','reviewer');
  createUser(db,'read-only','Read-Only-Password-123','viewer');
  createUser(db,'outside-user','Outside-User-Password-123','reviewer',OTHER_ORG);
- run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','PrivateSystem','private.csv','2026-10-20','USD','sha-other','2026-10-20T00:00:00Z','secret,private');
+ run(db,'INSERT INTO source_reports VALUES (?,?,?,?,?,?,?,?,?,?)','OTHER-R1',OTHER_ORG,'obligation','PrivateSystem','private.csv','2026-10-20','USD',sha('secret,private'),'2026-10-20T00:00:00Z','secret,private');
  const server=createApp(db);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
  const address=server.address();if(!address||typeof address==='string')throw Error('No bound address');const port=address.port;const base=`http://127.0.0.1:${port}`;
  try{
@@ -88,6 +88,11 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const logout=await as(viewerCookie,'/api/auth/logout',{});assert.equal(logout.status,200);
   assert.equal((await as(viewerCookie,'/api/state')).status,401);
   assert.equal((await as(cookie,'/api/state')).status,200);
+  // All evidence read paths must fail closed when stored source or snapshot bytes change.
+  run(db,'UPDATE run_snapshots SET snapshot_json=? WHERE run_id=?','{}',first.body.latest.id);
+  assert.equal((await req('/api/evidence/'+exc.id)).status,409);
+  run(db,'UPDATE source_reports SET raw_csv=? WHERE id=?','tampered after import',first.body.reports[0].id);
+  assert.equal((await req('/api/reports/'+encodeURIComponent(first.body.reports[0].id)+'/raw')).status,409);
  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));db.close();}
  const reopened=createDB(dbfile);assert.ok(authenticate(reopened,'demo-admin','Demo-Admin-Password-123'));const stored=await Promise.resolve(reopened.prepare('SELECT COUNT(*) n FROM resolutions WHERE org_id=?').get(DEMO_ORG));assert.ok((stored as any).n>0);reopened.close();
  fs.rmSync(tmp,{recursive:true,force:true});
