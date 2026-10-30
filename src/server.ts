@@ -13,6 +13,21 @@ function send(res:ServerResponse,status:number,payload:any,mime='application/jso
   const data=typeof payload==='string'?payload:JSON.stringify(payload);
   res.writeHead(status,{'Content-Type':mime,'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",...extra});res.end(data);
 }
+// Defense against DNS rebinding: a malicious domain must never be able to
+// obtain the local demo cookie, even if DNS later resolves that domain to loopback.
+function isLocalHostHeader(value:string|undefined):boolean {
+  if(!value || /[\s\/@\\]/.test(value))return false;
+  try {
+    const u=new URL(`http://${value}/`);
+    return ['127.0.0.1','localhost','[::1]'].includes(u.hostname)
+      && !u.username && !u.password && u.pathname==='/' && !u.search && !u.hash;
+  } catch {return false;}
+}
+function assertLoopbackRequest(req:IncomingMessage):void {
+  const remote=req.socket.remoteAddress;
+  if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote||'') || !isLocalHostHeader(req.headers.host))
+    throw new DomainError('This demo accepts requests from localhost only',403);
+}
 async function body(req:IncomingMessage):Promise<any>{
   if(!(req.headers['content-type']||'').startsWith('application/json'))throw new DomainError('Content-Type must be application/json');
   let size=0,chunks:Buffer[]=[];for await(const chunk of req){size+=chunk.length;if(size>2_500_000)throw new DomainError('Payload exceeds 2.5 MB',413);chunks.push(chunk);}
@@ -22,7 +37,8 @@ export function createApp(db:DB){
   const token=crypto.randomBytes(32).toString('hex');
   return http.createServer(async(req,res)=>{
     try {
-      const url=new URL(req.url||'/',`http://${req.headers.host||'127.0.0.1'}`);
+      assertLoopbackRequest(req);
+      const url=new URL(req.url||'/',`http://${req.headers.host}`);
       const m=req.method||'GET';
       const isApi=url.pathname.startsWith('/api/');
       const cookie=`chh_session=${token}`;
@@ -32,7 +48,11 @@ export function createApp(db:DB){
         // Loopback demo has a single server-issued session. Organization selection is never client-controlled.
         if(m!=='GET'){
           const origin=req.headers.origin;
-          if(origin && new URL(origin).host!==req.headers.host)throw new DomainError('Cross-origin writes denied',403);
+          if(origin){
+            let sameOrigin=false;
+            try {sameOrigin=new URL(origin).origin===new URL(`http://${req.headers.host}`).origin;}catch{}
+            if(!sameOrigin)throw new DomainError('Cross-origin writes denied',403);
+          }
         }
         if(m==='GET'&&url.pathname==='/api/state')return send(res,200,state(db,DEMO_ORG,url.searchParams.get('run')||undefined));
         if(m==='GET'&&url.pathname==='/api/export'){
