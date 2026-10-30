@@ -215,6 +215,8 @@ test('historical invoice identities, dates and source reports remain frozen afte
   assert.equal(imported.conflicts,2);
   for(const conflict of rows(db,"SELECT id FROM import_conflicts WHERE org_id=? AND status='pending'",DEMO_ORG))
     acceptConflict(db,conflict.id,'accepted');
+  // Only a new reconciliation produces a new snapshot; older runs stay frozen.
+  reconcile(db);
   const current=state(db);
   assert.equal(current.obligations.find((o:any)=>o.source_key==='OBL-001').invoice_ref,'CHANGED-101');
   assert.equal(current.obligations.find((o:any)=>o.source_key==='OBL-003').invoice_ref,'CHANGED-1002');
