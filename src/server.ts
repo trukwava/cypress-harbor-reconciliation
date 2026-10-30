@@ -100,9 +100,9 @@ export function createApp(db:DB){
             const p=snapshot.payments.find((p:any)=>p.id===a.payment_id);
             return {...a,source_row_id:p?.source_row_id};
           })):exc.obligation_id?rows(db,`SELECT a.amount_minor,p.id,p.source_row_id FROM allocations a JOIN payments p ON p.id=a.payment_id WHERE a.obligation_id=? AND a.org_id=?`,exc.obligation_id,org):[];
-          const sourceIds=[exc.source_row_id,targetObl?.source_row_id|| (exc.obligation_id?one(db,'SELECT source_row_id FROM obligations WHERE id=? AND org_id=?',exc.obligation_id,DEMO_ORG)?.source_row_id:null),targetPay?.source_row_id||(exc.payment_id?one(db,'SELECT source_row_id FROM payments WHERE id=? AND org_id=?',exc.payment_id,org)?.source_row_id:null),...ownRows.map((a:any)=>a.source_row_id)].filter(Boolean);
+          const sourceIds=[exc.source_row_id,targetObl?.source_row_id|| (exc.obligation_id?one(db,'SELECT source_row_id FROM obligations WHERE id=? AND org_id=?',exc.obligation_id,org)?.source_row_id:null),targetPay?.source_row_id||(exc.payment_id?one(db,'SELECT source_row_id FROM payments WHERE id=? AND org_id=?',exc.payment_id,org)?.source_row_id:null),...ownRows.map((a:any)=>a.source_row_id)].filter(Boolean);
           const evidence=[...new Set(sourceIds)].map(sourceId=>one(db,'SELECT r.*,s.source_system,s.as_of,s.filename FROM source_rows r JOIN source_reports s ON r.report_id=s.id WHERE r.id=? AND r.org_id=?',sourceId,org)).filter(Boolean).map(r=>({...r,raw:JSON.parse(r.raw_json),normalized:JSON.parse(r.normalized_json)}));
-          const appliedRule=one(db,'SELECT rule_version FROM reconciliation_runs WHERE id=? AND org_id=?',exc.run_id,DEMO_ORG);
+          const appliedRule=one(db,'SELECT rule_version FROM reconciliation_runs WHERE id=? AND org_id=?',exc.run_id,org);
           return send(res,200,{exception:exc,evidence,allocations:ownRows,rule_version:appliedRule?.rule_version});
         }
         if(m==='GET'&&url.pathname.startsWith('/api/reports/')&&url.pathname.endsWith('/raw')){
