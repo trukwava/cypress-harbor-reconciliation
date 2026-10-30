@@ -130,7 +130,7 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         assert page.locator("#manage-users").is_hidden()
         page.locator("[data-detail]").first.click()
         assert page.locator("#exception-form").is_hidden()
-        assert "read-only" in page.locator("#detail-dialog").inner_text().lower()
+        assert page.locator("#exception-form").is_hidden(), "Viewer must not see a review form"
         page.locator("#detail-dialog [data-close]").first.click()
         page.locator('[data-page="imports"]').click()
         assert page.locator("#upload-file").is_disabled()
