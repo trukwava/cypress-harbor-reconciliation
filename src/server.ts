@@ -6,6 +6,7 @@ import {createDB,DB,DEMO_ORG,one,rows} from './db';
 import {seed,resetDemo,writeFixtureFiles} from './seed';
 import {addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state,audit} from './domain';
 import {authenticate,bootstrapAdmin,createUser,issueSession,listUsers,principalFromToken,requireRole,revokeSession} from './auth';
+import {exceptionQueueCSV} from './csv_export';
 
 const publicDir=path.resolve(__dirname,'../../public');
 const fixturesDir=path.resolve(__dirname,'../../fixtures');
@@ -83,6 +84,10 @@ export function createApp(db:DB){
           }
         }
         if(m==='GET'&&url.pathname==='/api/state')return send(res,200,state(db,org,url.searchParams.get('run')||undefined));
+        if(m==='GET'&&url.pathname==='/api/export/exceptions.csv'){
+          const output=exceptionQueueCSV(db,org,url.searchParams.get('run')||undefined);
+          return send(res,200,output.csv,'text/csv; charset=utf-8',{'Content-Disposition':`attachment; filename="${output.filename}"`});
+        }
         if(m==='GET'&&url.pathname==='/api/export'){
           const p=exportPack(db,org,url.searchParams.get('run')||undefined);
           if(!p.manifest.selected_run)throw new DomainError('No reconciliation run to export',409);
