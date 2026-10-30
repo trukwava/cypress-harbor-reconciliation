@@ -45,8 +45,8 @@ export function generateFixtures(){
 export function writeFixtureFiles(dir:string){const f=generateFixtures();fs.mkdirSync(dir,{recursive:true});
   for(const [name,body] of Object.entries({'obligations_october.csv':f.obl,'payments_october.csv':f.pay,'obligations_stale.csv':f.stale,'malformed_payments.csv':f.malformed,'obligation_correction_requires_review.csv':f.correction}))fs.writeFileSync(path.join(dir,name),body);
 }
-export function seed(db:DB){
-  if(one(db,'SELECT id FROM organizations WHERE id=?',DEMO_ORG))return;
+export function seed(db:DB,force=false){
+  if(!force && one(db,'SELECT id FROM organizations WHERE id=?',DEMO_ORG))return;
   transaction(db,()=>{
     run(db,'INSERT OR IGNORE INTO organizations VALUES (?,?,?)',DEMO_ORG,'Cypress Harbor Housing (synthetic)',1);
     run(db,'INSERT OR IGNORE INTO organizations VALUES (?,?,?)',OTHER_ORG,'Other Organization – isolation fixture',1);
@@ -79,9 +79,9 @@ export function seed(db:DB){
 }
 export function resetDemo(db:DB){
   transaction(db,()=>{
-    const tables=['audit_events','resolutions','exceptions','match_decisions','match_candidates','run_snapshots','reconciliation_runs','import_conflicts','allocations','obligations','payments','source_rows','import_batches','source_reports','aliases','external_accounts','properties','entities','organizations'];
+    const tables=['audit_events','resolutions','exceptions','match_decisions','match_candidates','run_snapshots','reconciliation_runs','import_conflicts','allocations','obligations','payments','source_rows','import_batches','source_reports','aliases','external_accounts','properties','entities'];
     for(const t of tables)run(db,`DELETE FROM ${t} WHERE ${t==='organizations'?'id':'org_id'}=?`,DEMO_ORG);
   });
-  seed(db);
+  seed(db,true);
   return {reset:true,org:DEMO_ORG};
 }
