@@ -140,7 +140,7 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         login("browser-reviewer", "Reviewer-Passphrase-123456")
         assert page.locator("#run-reconcile").is_hidden()
         page.locator("[data-detail]").first.click()
-        assert page.locator("#exception-form").is_visible()
+        page.locator("#exception-form").wait_for(state="visible")
         page.locator("#detail-dialog [data-close]").first.click()
         page.locator('[data-page="matches"]').click()
         assert page.locator("[data-match]").count() > 0
