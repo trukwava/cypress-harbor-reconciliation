@@ -2,7 +2,7 @@
 
 A **local, synthetic financial-operations demo** for a fictional affordable-housing operator. Import obligation and payment CSV reports, identify conflicts without modifying a ledger, review evidence-linked exceptions, record decisions, and export an auditable reconciliation pack.
 
-This project is an original implementation inspired by the workflow described in the [Pursuit AssetFlow Lookbook](https://lookbook.pursuit.org/projects/assetflow). It does **not** reuse AssetFlow's code, real customer data, branding, or proprietary documents. Any reference claims belong to their original source and are not validation of this demo.
+This is an original implementation of a cross-system reconciliation workflow. It does **not** reuse third-party code, real customer data, branding or proprietary documents. All examples are synthetic; no external performance claims are presented as validation of the demo.
 
 ## Run locally
 
