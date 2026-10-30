@@ -34,6 +34,9 @@ It cannot authenticate users through a production identity provider, connect to 
 
 ## Validation
 
+The GitHub CI workflow runs both the Node regression suite and a **Chromium end-to-end smoke test** for the real login, reviewer, import, export, and historical-run screens. See [docs/TESTING.md](docs/TESTING.md) for how to run it locally and what the test proves.
+
+
 ```bash
 npm test
 ```
