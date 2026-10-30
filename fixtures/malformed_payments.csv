@@ -1,0 +1,2 @@
+payment_key,property_ref,invoice_ref,amount,transaction_date,posted_date,currency,type
+BAD-01,CHH-P01,999,"broken,2026-10-16,2026-10-17,USD,payment
