@@ -43,6 +43,13 @@ export function createApp(db:DB){
       const url=new URL(req.url||'/',`http://${req.headers.host}`);
       const m=req.method||'GET';
       const isApi=url.pathname.startsWith('/api/');
+      // Validate the Origin for every state-changing request, including login
+      // and user provisioning. The former bypassed the checks in the API router.
+      if(isApi && m!=='GET' && req.headers.origin){
+        let sameOrigin=false;
+        try {sameOrigin=new URL(req.headers.origin).origin===new URL(`http://${req.headers.host}`).origin;}catch{}
+        if(!sameOrigin)throw new DomainError('Cross-origin writes denied',403);
+      }
       if(isApi){
         const rawCookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('chh_session='));
         const token=rawCookie?.slice('chh_session='.length)||'';
@@ -74,14 +81,6 @@ export function createApp(db:DB){
           const user=createUser(db,String(payload?.username||''),String(payload?.password||''),payload?.role,org);
           audit(db,org,'user.created','user',user.id,{role:user.role},actor.username);
           return send(res,201,{user});
-        }
-        if(m!=='GET'){
-          const origin=req.headers.origin;
-          if(origin){
-            let sameOrigin=false;
-            try {sameOrigin=new URL(origin).origin===new URL(`http://${req.headers.host}`).origin;}catch{}
-            if(!sameOrigin)throw new DomainError('Cross-origin writes denied',403);
-          }
         }
         if(m==='GET'&&url.pathname==='/api/state')return send(res,200,state(db,org,url.searchParams.get('run')||undefined));
         if(m==='GET'&&url.pathname==='/api/export/exceptions.csv'){
