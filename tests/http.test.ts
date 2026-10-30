@@ -88,6 +88,11 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const logout=await as(viewerCookie,'/api/auth/logout',{});assert.equal(logout.status,200);
   assert.equal((await as(viewerCookie,'/api/state')).status,401);
   assert.equal((await as(cookie,'/api/state')).status,200);
+  // All evidence read paths must fail closed when stored source or snapshot bytes change.
+  run(db,'UPDATE run_snapshots SET snapshot_json=? WHERE run_id=?','{}',first.body.latest.id);
+  assert.equal((await req('/api/evidence/'+exc.id)).status,409);
+  run(db,'UPDATE source_reports SET raw_csv=? WHERE id=?','tampered after import',first.body.reports[0].id);
+  assert.equal((await req('/api/reports/'+encodeURIComponent(first.body.reports[0].id)+'/raw')).status,409);
  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));db.close();}
  const reopened=createDB(dbfile);assert.ok(authenticate(reopened,'demo-admin','Demo-Admin-Password-123'));const stored=await Promise.resolve(reopened.prepare('SELECT COUNT(*) n FROM resolutions WHERE org_id=?').get(DEMO_ORG));assert.ok((stored as any).n>0);reopened.close();
  fs.rmSync(tmp,{recursive:true,force:true});
