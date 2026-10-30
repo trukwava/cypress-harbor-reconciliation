@@ -4,6 +4,10 @@ A **local, synthetic financial-operations demo** for a fictional affordable-hous
 
 This is an original implementation of a cross-system reconciliation workflow. It does **not** reuse third-party code, real customer data, branding or proprietary documents. All examples are synthetic; no external performance claims are presented as validation of the demo.
 
+## Repository publication status
+
+**This repository is being populated from a locally verified source bundle.** At this checkpoint, not all `src/`, `tests/`, `public/`, and `fixtures/` files have been committed, so a fresh clone of this repository is not yet runnable. The complete local source bundle is preserved separately; the instructions below apply once the remaining files are added. Do not interpret an incomplete repository as a deployed application.
+
 ## Run locally
 
 Requires **Node.js 22.16+** and npm. No external service credentials, Docker, or paid API is needed.
