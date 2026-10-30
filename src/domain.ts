@@ -257,7 +257,7 @@ export function exportPack(db:DB,org=DEMO_ORG,runId?:string){
   // stored SHA-256 digest, rather than trusting an unverifiable hash label.
   const sourceReports=rows(db,'SELECT id,kind,filename,as_of,source_system,currency,raw_sha,uploaded_at,raw_csv FROM source_reports WHERE org_id=?',org).filter(r=>reportIds.has(r.id));
   for(const report of sourceReports){
-    const actual=sha(report.raw_csv.replace(/^\\uFEFF/,''));
+    const actual=sha(report.raw_csv.replace(/^\uFEFF/,''));
     if(actual!==report.raw_sha)throw new DomainError('Stored source CSV failed SHA-256 integrity check',409);
   }
   const relevantIds=new Set([s.latest?.id,...sourceReports.map(r=>r.id),...s.exceptions.map(e=>e.id),...s.candidates.map(c=>c.id),...s.allocations.map(a=>a.id)]);
