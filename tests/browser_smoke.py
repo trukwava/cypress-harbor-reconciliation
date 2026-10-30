@@ -153,6 +153,17 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         assert page.locator("[data-match]").count() > 0
         page.locator('[data-page="imports"]').click()
         assert page.locator("#commit-import").is_disabled()
+        # Regression for narrow-screen reviewer navigation and action layout.
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.locator('[data-page="queue"]').click()
+        assert page.locator("#navigation").is_visible()
+        sizes = page.evaluate("""() => ({
+            viewport: window.innerWidth,
+            document: document.documentElement.scrollWidth
+        })""")
+        assert sizes["document"] <= sizes["viewport"] + 2, sizes
+        page.locator('[data-page="history"]').click()
+        assert page.locator('a[href^="/api/export/exceptions.csv"]').first.is_visible()
         assert not javascript_errors, javascript_errors
         context.close()
         browser.close()
