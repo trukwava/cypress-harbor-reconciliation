@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {createDB,DB,DEMO_ORG,one,rows} from './db';
 import {seed,resetDemo,writeFixtureFiles} from './seed';
-import {addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state} from './domain';
+import {addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state,audit} from './domain';
+import {authenticate,bootstrapAdmin,createUser,issueSession,listUsers,principalFromToken,requireRole,revokeSession} from './auth';
 
 const publicDir=path.resolve(__dirname,'../../public');
 const fixturesDir=path.resolve(__dirname,'../../fixtures');
@@ -34,18 +35,45 @@ async function body(req:IncomingMessage):Promise<any>{
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new DomainError('Malformed JSON');}
 }
 export function createApp(db:DB){
-  const token=crypto.randomBytes(32).toString('hex');
+  const failedLogins=new Map<string,{count:number,until:number}>();
   return http.createServer(async(req,res)=>{
     try {
       assertLoopbackRequest(req);
       const url=new URL(req.url||'/',`http://${req.headers.host}`);
       const m=req.method||'GET';
       const isApi=url.pathname.startsWith('/api/');
-      const cookie=`chh_session=${token}`;
       if(isApi){
-        const cookies=(req.headers.cookie||'').split(';').map(x=>x.trim());
-        if(!cookies.includes(cookie))throw new DomainError('Session unavailable; reload the demo',401);
-        // Loopback demo has a single server-issued session. Organization selection is never client-controlled.
+        const rawCookie=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('chh_session='));
+        const token=rawCookie?.slice('chh_session='.length)||'';
+        if(m==='POST'&&url.pathname==='/api/auth/login'){
+          const payload=await body(req),username=String(payload?.username||'').trim().toLowerCase();
+          const key=(req.socket.remoteAddress||'local')+':'+username;
+          const attempt=failedLogins.get(key);
+          if(attempt&&attempt.count>=6&&attempt.until>Date.now())throw new DomainError('Too many attempts; try again later',429);
+          const identity=authenticate(db,username,String(payload?.password||''));
+          if(!identity){
+            failedLogins.set(key,{count:(attempt&&attempt.until>Date.now()?attempt.count:0)+1,until:Date.now()+5*60_000});
+            throw new DomainError('Invalid username or password',401);
+          }
+          failedLogins.delete(key);if(token)revokeSession(db,token);
+          const issued=issueSession(db,identity);
+          return send(res,200,{user:identity},'application/json; charset=utf-8',{'Set-Cookie':'chh_session='+issued+'; HttpOnly; SameSite=Strict; Path=/api; Max-Age=28800'});
+        }
+        const actor=principalFromToken(db,token);
+        if(!actor)throw new DomainError('Sign in to access this workspace',401);
+        const org=actor.org_id;
+        if(m==='GET'&&url.pathname==='/api/auth/me')return send(res,200,{user:actor});
+        if(m==='POST'&&url.pathname==='/api/auth/logout'){
+          revokeSession(db,token);
+          return send(res,200,{logged_out:true},'application/json; charset=utf-8',{'Set-Cookie':'chh_session=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0'});
+        }
+        if(m==='GET'&&url.pathname==='/api/users'){requireRole(actor,'admin');return send(res,200,{users:listUsers(db,org)});}
+        if(m==='POST'&&url.pathname==='/api/users'){
+          requireRole(actor,'admin');const payload=await body(req);
+          const user=createUser(db,String(payload?.username||''),String(payload?.password||''),payload?.role,org);
+          audit(db,org,'user.created','user',user.id,{role:user.role},actor.username);
+          return send(res,201,{user});
+        }
         if(m!=='GET'){
           const origin=req.headers.origin;
           if(origin){
