@@ -1,0 +1,20 @@
+{
+  "name": "cypress-harbor-reconciliation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-only financial reconciliation demo with auditable exception queue",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "dev": "npm run build && npm start",
+    "test": "npm run build && node --test dist/tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.16"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
