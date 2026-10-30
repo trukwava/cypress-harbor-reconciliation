@@ -174,3 +174,28 @@ test('database rejects cross-tenant foreign keys on insert and update, independe
   assert.ok(otherRun.id && row.id);
   db.close();
 });
+
+
+test('historical match candidates retain frozen available amounts after subsequent allocations',()=>{
+  const db=setup();
+  const before=state(db);
+  const candidate=before.candidates.find((c:any)=>c.status==='proposed'&&c.available_payment_minor>0&&c.outstanding_obligation_minor>0);
+  assert.ok(candidate,'seed must contain a reviewable match');
+  const frozenPayment=candidate.available_payment_minor;
+  const frozenObligation=candidate.outstanding_obligation_minor;
+  decideMatch(db,candidate.id,'accepted','Matched identifiers and evidence',Math.min(100,frozenPayment,frozenObligation));
+  const afterDecision=state(db,DEMO_ORG,before.latest.id);
+  const historical=afterDecision.candidates.find((c:any)=>c.id===candidate.id);
+  assert.equal(historical.available_payment_minor,frozenPayment);
+  assert.equal(historical.outstanding_obligation_minor,frozenObligation);
+  reconcile(db);
+  const afterNewRun=state(db,DEMO_ORG,before.latest.id);
+  const stillHistorical=afterNewRun.candidates.find((c:any)=>c.id===candidate.id);
+  assert.equal(stillHistorical.available_payment_minor,frozenPayment);
+  assert.equal(stillHistorical.outstanding_obligation_minor,frozenObligation);
+  const pack=exportPack(db,DEMO_ORG,before.latest.id);
+  const exported=pack.candidates.find((c:any)=>c.id===candidate.id);
+  assert.equal(exported.available_payment_minor,frozenPayment);
+  assert.equal(exported.outstanding_obligation_minor,frozenObligation);
+  db.close();
+});
