@@ -147,7 +147,7 @@ export function reconcile(db:DB,org=DEMO_ORG,actor='Demo Reviewer'){
       const unchanged=previous&&previous.basis_hash===basis;
       const status=unchanged?previous.status:'open', owner=previous?.owner||'Unassigned',note=unchanged?previous.note:'';
       const exceptionId=id('exc');
-      run(db,'INSERT INTO exceptions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',exceptionId,org,runId,key,kind,obligationId||null,paymentId||null,sourceRowId||null,amount,reason,basis,status,owner,note,previous&&!unchanged&&previous.status==='reviewed'?previous.id:null,now());issueCount++;
+      run(db,'INSERT INTO exceptions (id,org_id,run_id,issue_key,kind,obligation_id,payment_id,source_row_id,amount_minor,reason,basis_hash,status,owner,note,reopened_from,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',exceptionId,org,runId,key,kind,obligationId||null,paymentId||null,sourceRowId||null,amount,reason,basis,status,owner,note,previous&&!unchanged&&previous.status==='reviewed'?previous.id:null,now());issueCount++;
     };
     for(const o of obls){
       const allocated=allocByObl.get(o.id)||0, remaining=o.amount_minor-allocated;
@@ -198,17 +198,23 @@ export function decideMatch(db:DB,candidateId:string,decision:'accepted'|'reject
     return {id:candidateId,decision,allocation_minor:amount};
   });
 }
-export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed'|'info_requested',owner:string,note:string,org=DEMO_ORG,actor='Demo Reviewer'){
+export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed'|'info_requested',owner:string,note:string,org=DEMO_ORG,actor='Demo Reviewer',expectedRevision?:number){
   return transaction(db,()=>{
-    const target=one(db,'SELECT id,run_id FROM exceptions WHERE id=? AND org_id=?',exceptionId,org);
+    const target=one(db,'SELECT id,run_id,review_revision FROM exceptions WHERE id=? AND org_id=?',exceptionId,org);
     if(!target)throw new DomainError('Exception not found',404);
     const current=one(db,'SELECT id FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',org);
     if(target.run_id!==current?.id)throw new DomainError('Historical runs are read-only',409);
+    if(!Number.isSafeInteger(expectedRevision)||expectedRevision!<0)
+      throw new DomainError('Review revision required; reopen the evidence to refresh',428);
+    if(expectedRevision!==target.review_revision)
+      throw new DomainError('Exception changed during review; reopen evidence before resubmitting',409);
     if(owner.length>80||note.length>2000)throw new DomainError('Owner or note too long');
-    run(db,'UPDATE exceptions SET status=?,owner=?,note=? WHERE id=? AND org_id=?',status,owner.trim()||'Unassigned',note,exceptionId,org);
+    const updated=run(db,'UPDATE exceptions SET status=?,owner=?,note=?,review_revision=review_revision+1 WHERE id=? AND org_id=? AND review_revision=?',
+      status,owner.trim()||'Unassigned',note,exceptionId,org,expectedRevision);
+    if(updated.changes!==1)throw new DomainError('Exception changed during review; reopen evidence before resubmitting',409);
     run(db,'INSERT INTO resolutions VALUES (?,?,?,?,?,?,?)',id('resolution'),org,exceptionId,status,actor,note,now());
-    audit(db,org,'exception.'+status,'exception',exceptionId,{owner},actor);
-    return {id:exceptionId,status};
+    audit(db,org,'exception.'+status,'exception',exceptionId,{owner,review_revision:expectedRevision+1},actor);
+    return {id:exceptionId,status,review_revision:expectedRevision+1};
   });
 }
 export function addAlias(db:DB,propertyId:string,alias:string,org=DEMO_ORG,actor='Demo Reviewer'){
