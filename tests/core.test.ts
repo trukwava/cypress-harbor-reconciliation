@@ -69,7 +69,7 @@ test('new snapshot with identical records creates evidence but no duplicate obli
 test('corrected reports require explicit approval, then reviewed changed-basis exception reopens',()=>{
   const db=setup(),before=state(db),target=before.exceptions.find(e=>e.kind==='paid_elsewhere_still_due'&&e.obligation_key==='OBL-001');
   assert.ok(target);
-  reviewException(db,target.id,'reviewed','Finance Analyst','Checked original discrepancy');
+  reviewException(db,target.id,'reviewed','Finance Analyst','Checked original discrepancy',DEMO_ORG,'Finance Analyst',target.review_revision);
   const unchanged=reconcile(db),same=state(db),sameIssue=same.exceptions.find(e=>e.issue_key===target.issue_key);
   assert.equal(sameIssue.status,'reviewed');assert.equal(sameIssue.owner,'Finance Analyst');
   const f=generateFixtures();const outcome=commitImport(db,{kind:'obligation',filename:'corrected.csv',csv:f.correction,as_of:'2026-10-25',source_system:'MunicipalLedger',currency:'USD'});
