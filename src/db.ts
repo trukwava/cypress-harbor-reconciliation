@@ -137,4 +137,30 @@ export const now = () => new Date().toISOString();
 export const id = (prefix:string) => `${prefix}_${crypto.randomUUID()}`;
 import crypto from 'node:crypto';
 export const sha = (s:string) => crypto.createHash('sha256').update(s).digest('hex');
-export function transaction<T>(db:DB,fn:()=>T):T { db.exec('BEGIN IMMEDIATE');try {const v=fn();db.exec('COMMIT');return v;}catch(e){db.exec('ROLLBACK');throw e;} }
+/** An independent SQLite writer currently holds the transaction lock. */
+export class DatabaseBusyError extends Error {
+  constructor(){
+    super('Another reviewer is saving changes; refresh the queue and retry.');
+    this.name='DatabaseBusyError';
+  }
+}
+function isBusyError(error:unknown):boolean {
+  return /database is locked|database is busy|SQLITE_BUSY|SQLITE_LOCKED/i.test(String((error as Error)?.message||error));
+}
+export function transaction<T>(db:DB,fn:()=>T):T {
+  try {
+    db.exec('BEGIN IMMEDIATE'); // SQLite serializes writers across connections.
+  } catch(error){
+    if(isBusyError(error))throw new DatabaseBusyError();
+    throw error;
+  }
+  try {
+    const result=fn();
+    db.exec('COMMIT');
+    return result;
+  } catch(error){
+    try {db.exec('ROLLBACK');} catch { /* Preserve the original error. */ }
+    if(isBusyError(error))throw new DatabaseBusyError();
+    throw error;
+  }
+}

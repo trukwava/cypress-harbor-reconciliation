@@ -2,7 +2,7 @@ import http,{IncomingMessage,ServerResponse} from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import {createDB,DB,DEMO_ORG,one,rows,sha} from './db';
+import {createDB,DB,DEMO_ORG,one,rows,sha,DatabaseBusyError} from './db';
 import {seed,resetDemo,writeFixtureFiles} from './seed';
 import {addAlias,acceptConflict,commitImport,decideMatch,DomainError,exportPack,previewImport,reconcile,reviewException,state,audit} from './domain';
 import {authenticate,bootstrapAdmin,createUser,issueSession,listUsers,principalFromToken,requireRole,revokeSession} from './auth';
@@ -149,7 +149,7 @@ export function createApp(db:DB){
         const fixture=path.join(fixturesDir,url.pathname.slice(10));if(fs.existsSync(fixture))return send(res,200,fs.readFileSync(fixture).toString('utf8'),'text/csv; charset=utf-8');
       }
       throw new DomainError('Page not found',404);
-    } catch(e){const err=e as Error;const code=e instanceof DomainError?e.status:500;
+    } catch(e){const err=e as Error;const code=e instanceof DomainError?e.status:e instanceof DatabaseBusyError?409:500;
       // Never log imported source contents or request payloads.
       if(code===500)console.error('Request failed:',err.message);
       send(res,code,{error:code===500?'Internal error':err.message});
