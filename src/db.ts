@@ -30,7 +30,7 @@ export function createDB(filename = ':memory:'): DB {
   CREATE TABLE IF NOT EXISTS run_snapshots (run_id TEXT PRIMARY KEY REFERENCES reconciliation_runs(id),org_id TEXT NOT NULL REFERENCES organizations(id),snapshot_json TEXT NOT NULL,snapshot_sha TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS match_candidates (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),run_id TEXT NOT NULL REFERENCES reconciliation_runs(id),obligation_id TEXT NOT NULL REFERENCES obligations(id),payment_id TEXT NOT NULL REFERENCES payments(id),basis TEXT NOT NULL,strength TEXT NOT NULL CHECK(strength IN ('explicit','suggested')),evidence_hash TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'proposed' CHECK(status IN ('proposed','accepted','rejected')),UNIQUE(run_id,obligation_id,payment_id));
   CREATE TABLE IF NOT EXISTS match_decisions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),candidate_id TEXT NOT NULL REFERENCES match_candidates(id),decision TEXT NOT NULL CHECK(decision IN ('accepted','rejected')),allocation_minor INTEGER NOT NULL DEFAULT 0,reviewer TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),run_id TEXT NOT NULL REFERENCES reconciliation_runs(id),issue_key TEXT NOT NULL,kind TEXT NOT NULL,obligation_id TEXT REFERENCES obligations(id),payment_id TEXT REFERENCES payments(id),source_row_id TEXT REFERENCES source_rows(id),amount_minor INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL,basis_hash TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','reviewed','info_requested')),owner TEXT NOT NULL DEFAULT 'Unassigned',note TEXT NOT NULL DEFAULT '',reopened_from TEXT,created_at TEXT NOT NULL,UNIQUE(run_id,issue_key));
+  CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),run_id TEXT NOT NULL REFERENCES reconciliation_runs(id),issue_key TEXT NOT NULL,kind TEXT NOT NULL,obligation_id TEXT REFERENCES obligations(id),payment_id TEXT REFERENCES payments(id),source_row_id TEXT REFERENCES source_rows(id),amount_minor INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL,basis_hash TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','reviewed','info_requested')),owner TEXT NOT NULL DEFAULT 'Unassigned',note TEXT NOT NULL DEFAULT '',reopened_from TEXT,created_at TEXT NOT NULL,review_revision INTEGER NOT NULL DEFAULT 0,UNIQUE(run_id,issue_key));
   CREATE TABLE IF NOT EXISTS resolutions (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),exception_id TEXT NOT NULL REFERENCES exceptions(id),state TEXT NOT NULL CHECK(state IN ('open','reviewed','info_requested')),reviewer TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY,org_id TEXT NOT NULL REFERENCES organizations(id),actor TEXT NOT NULL,action TEXT NOT NULL,object_type TEXT NOT NULL,object_id TEXT NOT NULL,details_json TEXT NOT NULL,created_at TEXT NOT NULL);
   CREATE INDEX IF NOT EXISTS idx_exceptions_run ON exceptions(org_id,run_id,status);
@@ -127,6 +127,11 @@ export function createDB(filename = ':memory:'): DB {
       db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}
   }
+  // Existing localhost databases predate optimistic review revisions.
+  // ALTER TABLE preserves their exception history and starts revisions at zero.
+  const exceptionColumns=db.prepare('PRAGMA table_info(exceptions)').all() as any[];
+  if(!exceptionColumns.some(c=>c.name==='review_revision'))
+    db.exec('ALTER TABLE exceptions ADD COLUMN review_revision INTEGER NOT NULL DEFAULT 0');
   return db;
 }
 

@@ -73,9 +73,21 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   assert.equal(malformed.status,400);
   const exc=first.body.exceptions.find((e:any)=>e.kind==='paid_elsewhere_still_due');assert.ok(exc);
   const evidence=await req('/api/evidence/'+exc.id);assert.equal(evidence.status,200);assert.ok(evidence.body.evidence.length>=2);
-  const reviewed=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'M. Finance',note:'Source needs a corrected due notice'});
+  const reviewed=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'M. Finance',note:'Source needs a corrected due notice',expected_revision:exc.review_revision});
   assert.equal(reviewed.status,200);
   assert.equal(db.prepare('SELECT reviewer FROM resolutions WHERE exception_id=? ORDER BY rowid DESC LIMIT 1').get(exc.id)?.reviewer,'finance-reviewer');
+  const missingRevision=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'Accidental overwrite',note:'missing revision'});
+  assert.equal(missingRevision.status,428);
+  const competing=first.body.exceptions.find((e:any)=>e.id!==exc.id);
+  assert.ok(competing);
+  const competePath='/api/exceptions/'+competing.id+'/review';
+  const [reviewA,reviewB]=await Promise.all([
+    as(reviewerCookie,competePath,{status:'reviewed',owner:'Finance A',note:'Note A',expected_revision:competing.review_revision}),
+    as(cookie,competePath,{status:'reviewed',owner:'Finance B',note:'Note B',expected_revision:competing.review_revision})
+  ]);
+  assert.deepEqual([reviewA.status,reviewB.status].sort(),[200,409]);
+  assert.equal(db.prepare('SELECT review_revision FROM exceptions WHERE id=?').get(competing.id)?.review_revision,1);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM resolutions WHERE exception_id=?').get(competing.id)?.n,1);
   const rr=await req('/api/reconcile',{});assert.equal(rr.status,200);
   assert.equal(db.prepare("SELECT actor FROM audit_events WHERE action='reconciliation.completed' AND object_id=?").get(rr.body.run_id)?.actor,'demo-admin');
   const latest=await req('/api/state');const successor=latest.body.exceptions.find((e:any)=>e.issue_key===exc.issue_key);

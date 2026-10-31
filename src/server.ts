@@ -129,7 +129,7 @@ export function createApp(db:DB){
           }
           if(/^\/api\/exceptions\/[^/]+\/review$/.test(url.pathname)){
             requireRole(actor,'reviewer','admin');if(!['open','reviewed','info_requested'].includes(payload.status))throw new DomainError('Invalid review state');
-            const result=reviewException(db,url.pathname.split('/')[3],payload.status,String(payload.owner||'Unassigned'),String(payload.note||''),org,actor.username);return send(res,200,result);
+            const result=reviewException(db,url.pathname.split('/')[3],payload.status,String(payload.owner||'Unassigned'),String(payload.note||''),org,actor.username,payload.expected_revision);return send(res,200,result);
           }
           if(/^\/api\/conflicts\/[^/]+\/decide$/.test(url.pathname)){
             requireRole(actor,'admin');if(!['accepted','rejected'].includes(payload.decision))throw new DomainError('Invalid conflict decision');
