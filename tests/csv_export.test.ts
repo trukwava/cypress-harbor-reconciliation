@@ -9,7 +9,7 @@ test('exception CSV preserves run selection and neutralizes spreadsheet formulas
   const db=createDB();seed(db);
   const first=state(db),firstId=first.latest.id;
   const target=first.exceptions[0];
-  reviewException(db,target.id,'reviewed','=2+3','+SUM("x")');
+  reviewException(db,target.id,'reviewed','=2+3','+SUM("x")',DEMO_ORG,'CSV Reviewer',target.review_revision);
   const output=exceptionQueueCSV(db,DEMO_ORG,firstId);
   assert.equal(output.count,first.exceptions.length);
   assert.match(output.filename,/^reconciliation-exceptions-.*\.csv$/);
