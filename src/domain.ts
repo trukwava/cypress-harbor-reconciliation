@@ -204,7 +204,7 @@ export function reviewException(db:DB,exceptionId:string,status:'open'|'reviewed
     if(!target)throw new DomainError('Exception not found',404);
     const current=one(db,'SELECT id FROM reconciliation_runs WHERE org_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',org);
     if(target.run_id!==current?.id)throw new DomainError('Historical runs are read-only',409);
-    if(!Number.isSafeInteger(expectedRevision)||expectedRevision!<0)
+    if(expectedRevision===undefined||!Number.isSafeInteger(expectedRevision)||expectedRevision<0)
       throw new DomainError('Review revision required; reopen the evidence to refresh',428);
     if(expectedRevision!==target.review_revision)
       throw new DomainError('Exception changed during review; reopen evidence before resubmitting',409);
