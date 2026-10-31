@@ -189,7 +189,10 @@ export function decideMatch(db:DB,candidateId:string,decision:'accepted'|'reject
       if(!Number.isSafeInteger(amount)||amount<=0)throw new DomainError('No unallocated amount remaining',409);
       addAllocation(db,org,c.payment_id,c.obligation_id,amount,actor);
     }
-    run(db,'UPDATE match_candidates SET status=? WHERE id=? AND org_id=?',decision,candidateId,org);
+    // Compare-and-swap at the database boundary: a second reviewer may not
+    // produce another decision or allocation for an already-decided candidate.
+    const updated=run(db,"UPDATE match_candidates SET status=? WHERE id=? AND org_id=? AND status='proposed' AND run_id=?",decision,candidateId,org,c.run_id);
+    if(updated.changes!==1)throw new DomainError('Candidate already decided; refresh the queue',409);
     run(db,'INSERT INTO match_decisions VALUES (?,?,?,?,?,?,?,?)',id('decision'),org,candidateId,decision,amount,actor,String(note||'').slice(0,1000),now());
     audit(db,org,'match.'+decision,'match_candidate',candidateId,{allocation_minor:amount},actor);
     return {id:candidateId,decision,allocation_minor:amount};

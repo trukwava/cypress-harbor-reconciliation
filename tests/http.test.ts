@@ -84,6 +84,16 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   assert.equal(pack.body.manifest.mode,'synthetic-demo');assert.equal(pack.body.metrics.original_obligations_minor,latest.body.metrics.original_obligations_minor);
   assert.equal(pack.body.manifest.selected_run,latest.body.latest.id);
   assert.ok(pack.body.source_rows.length>40);
+  // Two separately signed-in reviewers submitting the same stale proposal:
+  // one decision wins, the other receives 409; no second allocation is created.
+  const pending=latest.body.candidates.find((c:any)=>c.status==='proposed'&&c.available_payment_minor>=100&&c.outstanding_obligation_minor>=100);
+  assert.ok(pending);
+  const raceRoute='/api/matches/'+encodeURIComponent(pending.id)+'/decide';
+  const racePayload={decision:'accepted',note:'Reviewed synthetic evidence',amount_minor:100};
+  const [raceA,raceB]=await Promise.all([as(reviewerCookie,raceRoute,racePayload),as(cookie,raceRoute,racePayload)]);
+  assert.deepEqual([raceA.status,raceB.status].sort(),[200,409]);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM match_decisions WHERE candidate_id=?').get(pending.id)?.n,1);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='match.accepted' AND object_id=?").get(pending.id)?.n,1);
   const previous=await req('/api/state?run='+first.body.latest.id);assert.equal(previous.status,200);assert.equal(previous.body.selected_historical,true);
   const badReview=await req('/api/exceptions/'+exc.id+'/review',{status:'open',owner:'x',note:'history write'});assert.equal(badReview.status,409);
   const badOrigin=await fetch(base+'/api/reconcile',{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'http://evil.invalid'},body:'{}'});assert.equal(badOrigin.status,403);
