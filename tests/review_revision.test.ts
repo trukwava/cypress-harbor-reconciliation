@@ -22,7 +22,10 @@ test('stale reviewer submissions cannot overwrite newer exception notes',()=>{
       (err:any)=>err instanceof DomainError&&err.status===409&&/changed during review/.test(err.message)
     );
     const saved=one(first,'SELECT status,owner,note,review_revision FROM exceptions WHERE id=?',target.id);
-    assert.deepEqual(saved,{status:'reviewed',owner:'Reviewer A',note:'Evidence checked',review_revision:1});
+    assert.equal(saved.status,'reviewed');
+    assert.equal(saved.owner,'Reviewer A');
+    assert.equal(saved.note,'Evidence checked');
+    assert.equal(saved.review_revision,1);
     assert.equal(one(first,'SELECT COUNT(*) n FROM resolutions WHERE exception_id=?',target.id).n,1);
     assert.equal(one(first,'SELECT COUNT(*) n FROM audit_events WHERE object_id=? AND action=?',target.id,'exception.reviewed').n,1);
     assert.throws(
