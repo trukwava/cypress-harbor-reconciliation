@@ -72,10 +72,19 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   const malformed=await req('/api/import/preview',{kind:'payment',filename:'bad.csv',source_system:'VendorPayments',as_of:'2026-10-20',currency:'USD',csv:'payment_key,property_ref,invoice_ref,amount,transaction_date,posted_date,currency,type\nBAD,P1,12,"unterminated'});
   assert.equal(malformed.status,400);
   const exc=first.body.exceptions.find((e:any)=>e.kind==='paid_elsewhere_still_due');assert.ok(exc);
-  const evidence=await req('/api/evidence/'+exc.id);assert.equal(evidence.status,200);assert.ok(evidence.body.evidence.length>=2);
+  const evidence=await req('/api/evidence/'+exc.id);assert.equal(evidence.status,200);assert.ok(evidence.body.evidence.length>=2);assert.deepEqual(evidence.body.review_history,[]);assert.equal(evidence.body.prior_issue,null);
   const reviewed=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'M. Finance',note:'Source needs a corrected due notice',expected_revision:exc.review_revision});
   assert.equal(reviewed.status,200);
   assert.equal(db.prepare('SELECT reviewer FROM resolutions WHERE exception_id=? ORDER BY rowid DESC LIMIT 1').get(exc.id)?.reviewer,'finance-reviewer');
+  const history=await as(reviewerCookie,'/api/evidence/'+exc.id);
+  assert.equal(history.status,200);
+  assert.equal(history.body.review_history.length,1);
+  assert.equal(history.body.review_history[0].reviewer,'finance-reviewer');
+  assert.equal(history.body.review_history[0].state,'reviewed');
+  assert.equal(history.body.review_history[0].note,'Source needs a corrected due notice');
+  assert.equal(typeof history.body.review_history[0].created_at,'string');
+  assert.equal(history.body.exception.review_revision,1);
+
   const missingRevision=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'Accidental overwrite',note:'missing revision'});
   assert.equal(missingRevision.status,428);
   const competing=first.body.exceptions.find((e:any)=>e.id!==exc.id);
