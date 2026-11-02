@@ -55,6 +55,18 @@ The suite includes allocation and property/organization boundary tests, CSV malf
 
 The SQLite database persists to `data/reconciliation.sqlite` by default. The **Reset demo** action replaces only the demo tenant's financial records with the original fixtures, retaining local accounts and sessions. Reset is destructive for demo decisions. Download an export beforehand if you want to preserve a run. The app does not automatically delete the local SQLite database; delete the `data/` directory manually when the server is stopped if you want a clean local removal.
 
+## Backup and recovery
+
+To preserve the demo database (including local user accounts and source provenance), build the project and use the offline backup CLI:
+
+```bash
+node dist/src/backup.js backup data/reconciliation.sqlite ../cypress-harbor-backups/backup.sqlite
+node dist/src/backup.js verify ../cypress-harbor-backups/backup.sqlite
+node dist/src/backup.js restore ../cypress-harbor-backups/backup.sqlite data/recovered.sqlite
+```
+
+Restore **only to a new file**, then stop the old server and start with `DB_PATH=./data/recovered.sqlite npm start`. Backups contain local account hashes and complete source CSVs; do not commit or publicly share them. See [docs/BACKUP.md](docs/BACKUP.md) for integrity checks and recovery limitations.
+
 ## Status
 
 - [x] Source-preserving CSV import preview and commit
@@ -64,6 +76,7 @@ The SQLite database persists to `data/reconciliation.sqlite` by default. The **R
 - [x] Frozen historical evidence and JSON export
 - [x] Deterministic demo fixtures and automated tests
 - [x] Named local users, scoped sessions, three role levels, and regression tests
+- [x] Verified WAL-consistent SQLite backup, manifest checking, and non-overwriting restore
 - [ ] Production identity (SSO, MFA and recovery), multi-organization memberships, and full threat model
 - [ ] Institutional connectors, approvals, and compliance review
 - [ ] Finance-reviewer shadow pilot with actual (authorized) records
