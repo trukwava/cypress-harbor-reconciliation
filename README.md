@@ -18,7 +18,7 @@ Open **http://127.0.0.1:4173**. The first run creates `data/reconciliation.sqlit
 
 ## Workflow
 
-1. **Exception queue:** Review the outstanding, partial, unmatched, stale, and identity-related issues. Open an exception to inspect its original source rows, normalized values, allocation evidence, and rule version. Assign a reviewer, annotate, request information, or mark reviewed.
+1. **Exception queue:** Review the outstanding, partial, unmatched, stale, and identity-related issues. Open an exception to inspect its original source rows, normalized values, allocation evidence, and rule version. Assign a reviewer, annotate, request information, or mark reviewed. The evidence dialog also displays the chronological review history and any prior reviewed issue reopened after source corrections.
 2. **Match review:** Inspect proposed invoice/property matches. Accept or reject a candidate with rationale. Acceptance records a bounded allocation; it does not edit the source report or initiate a payment.
 3. **Source imports:** Preview obligation and payment CSVs separately before committing. Inspect parser errors and unresolved mappings. Report date and source system are required. Duplicate records are idempotent; corrected records enter review rather than silently overwriting an earlier source.
 4. **Property registry:** Inspect canonical property IDs, entity affiliations, account references, and reviewed aliases. A fuzzy address alone never resolves a property automatically.

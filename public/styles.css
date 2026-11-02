@@ -15,3 +15,15 @@
   .btn{min-height:40px}
   .kpi-num{overflow-wrap:anywhere}
 }
+
+/* Source evidence remains separate from the append-only reviewer chronology. */
+.review-timeline{margin:24px 0 6px;border-top:1px solid var(--border);padding-top:20px}
+.review-events{list-style:none;margin:12px 0 20px;padding:0 0 0 17px;border-left:2px solid #cbded8}
+.review-event{position:relative;margin:0 0 16px;padding:11px 14px;border:1px solid var(--border);background:#f8fbfa;border-radius:8px}
+.review-event:before{content:'';position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);left:-23px;top:18px;border:2px solid #fff}
+.review-event-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;font-size:12px}
+.review-event-head span{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace}
+.review-event p{white-space:pre-wrap;overflow-wrap:anywhere;margin:9px 0 0}
+.prior-review{border-left:3px solid #d6ae71;background:#fffaf0;padding:14px 16px;border-radius:6px;margin-top:20px}
+.prior-review .review-event{background:#fffdf7}
+@media(max-width:740px){.review-event{padding:10px}.review-timeline{margin-top:16px}}
