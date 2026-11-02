@@ -81,6 +81,13 @@ def exercise_browser(base: str, password: str, work: Path) -> None:
         dialog.get_by_role("button", name="Save review and audit event").click()
         dialog.wait_for(state="hidden")
         assert next(e for e in state()["exceptions"] if e["id"] == target["id"])["status"] == "reviewed"
+        page.locator('[data-detail="' + target["id"] + '"]').click()
+        dialog.wait_for(state="visible")
+        assert "Review history (1)" in dialog.inner_text()
+        assert "Inspected source obligations and payment evidence" in dialog.inner_text()
+        assert "demo-admin" in dialog.inner_text()
+        dialog.locator("[data-close]").first.click()
+        dialog.wait_for(state="hidden")
 
         # Native file upload -> preview -> persisted source report.
         page.locator('[data-page="imports"]').click()
