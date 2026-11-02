@@ -108,7 +108,13 @@ export function createApp(db:DB){
           const sourceIds=[exc.source_row_id,targetObl?.source_row_id|| (exc.obligation_id?one(db,'SELECT source_row_id FROM obligations WHERE id=? AND org_id=?',exc.obligation_id,org)?.source_row_id:null),targetPay?.source_row_id||(exc.payment_id?one(db,'SELECT source_row_id FROM payments WHERE id=? AND org_id=?',exc.payment_id,org)?.source_row_id:null),...ownRows.map((a:any)=>a.source_row_id)].filter(Boolean);
           const evidence=[...new Set(sourceIds)].map(sourceId=>one(db,'SELECT r.*,s.source_system,s.as_of,s.filename FROM source_rows r JOIN source_reports s ON r.report_id=s.id WHERE r.id=? AND r.org_id=?',sourceId,org)).filter(Boolean).map(r=>({...r,raw:JSON.parse(r.raw_json),normalized:JSON.parse(r.normalized_json)}));
           const appliedRule=one(db,'SELECT rule_version FROM reconciliation_runs WHERE id=? AND org_id=?',exc.run_id,org);
-          return send(res,200,{exception:exc,evidence,allocations:ownRows,rule_version:appliedRule?.rule_version});
+          // Review actions are chronologically distinct from the frozen evidence
+          // of the reconciliation run; preserve every recorded disposition.
+          const reviewHistory=rows(db,'SELECT id,state,reviewer,note,created_at FROM resolutions WHERE exception_id=? AND org_id=? ORDER BY rowid ASC',eid,org);
+          const priorIssue=exc.reopened_from?one(db,'SELECT id,kind,status,reason,created_at FROM exceptions WHERE id=? AND org_id=?',exc.reopened_from,org):null;
+          const priorReviewHistory=priorIssue?rows(db,'SELECT id,state,reviewer,note,created_at FROM resolutions WHERE exception_id=? AND org_id=? ORDER BY rowid ASC',priorIssue.id,org):[];
+          return send(res,200,{exception:exc,evidence,allocations:ownRows,rule_version:appliedRule?.rule_version,
+            review_history:reviewHistory,prior_issue:priorIssue,prior_review_history:priorReviewHistory});
         }
         if(m==='GET'&&url.pathname.startsWith('/api/reports/')&&url.pathname.endsWith('/raw')){
           const reportId=url.pathname.split('/')[3];const report=one(db,'SELECT filename,raw_csv,raw_sha FROM source_reports WHERE id=? AND org_id=?',reportId,org);
