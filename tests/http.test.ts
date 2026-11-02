@@ -78,12 +78,13 @@ test('HTTP workflow: session, preview errors, report isolation, review, export, 
   assert.equal(db.prepare('SELECT reviewer FROM resolutions WHERE exception_id=? ORDER BY rowid DESC LIMIT 1').get(exc.id)?.reviewer,'finance-reviewer');
   const history=await as(reviewerCookie,'/api/evidence/'+exc.id);
   assert.equal(history.status,200);
-  assert.equal(history.body.review_history.length,1);
-  assert.equal(history.body.review_history[0].reviewer,'finance-reviewer');
-  assert.equal(history.body.review_history[0].state,'reviewed');
-  assert.equal(history.body.review_history[0].note,'Source needs a corrected due notice');
-  assert.equal(typeof history.body.review_history[0].created_at,'string');
-  assert.equal(history.body.exception.review_revision,1);
+  const detail=await history.json() as any;
+  assert.equal(detail.review_history.length,1);
+  assert.equal(detail.review_history[0].reviewer,'finance-reviewer');
+  assert.equal(detail.review_history[0].state,'reviewed');
+  assert.equal(detail.review_history[0].note,'Source needs a corrected due notice');
+  assert.equal(typeof detail.review_history[0].created_at,'string');
+  assert.equal(detail.exception.review_revision,1);
 
   const missingRevision=await as(reviewerCookie,'/api/exceptions/'+exc.id+'/review',{status:'reviewed',owner:'Accidental overwrite',note:'missing revision'});
   assert.equal(missingRevision.status,428);
