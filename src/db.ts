@@ -152,6 +152,22 @@ export class DatabaseBusyError extends Error {
 function isBusyError(error:unknown):boolean {
   return /database is locked|database is busy|SQLITE_BUSY|SQLITE_LOCKED/i.test(String((error as Error)?.message||error));
 }
+/** A recoverable write-capacity failure; never retry blindly in a loop. */
+export class DatabaseCapacityError extends Error {
+  constructor(){
+    super('Database storage capacity reached. Free local storage or increase the database quota, then retry.');
+    this.name='DatabaseCapacityError';
+  }
+}
+export function isSqliteCapacityError(error:unknown):boolean {
+  return error instanceof DatabaseCapacityError
+    || /SQLITE_FULL|database or disk is full|database is full/i.test(String((error as Error)?.message||error));
+}
+function translateDatabaseError(error:unknown):never {
+  if(isBusyError(error))throw new DatabaseBusyError();
+  if(isSqliteCapacityError(error))throw new DatabaseCapacityError();
+  throw error;
+}
 // Nested operations share the outer BEGIN IMMEDIATE writer lock, but their
 // failures are isolated by SAVEPOINTs. This makes reset + reseed all-or-nothing.
 const transactionDepth=new WeakMap<DB,number>();
@@ -161,8 +177,7 @@ export function transaction<T>(db:DB,fn:()=>T):T {
   try {
     db.exec(depth===0?'BEGIN IMMEDIATE':'SAVEPOINT '+savepoint);
   } catch(error){
-    if(isBusyError(error))throw new DatabaseBusyError();
-    throw error;
+    translateDatabaseError(error);
   }
   transactionDepth.set(db,depth+1);
   try {
@@ -174,8 +189,7 @@ export function transaction<T>(db:DB,fn:()=>T):T {
       db.exec(depth===0?'ROLLBACK':'ROLLBACK TO SAVEPOINT '+savepoint);
       if(depth>0)db.exec('RELEASE SAVEPOINT '+savepoint);
     } catch { /* Preserve the initiating failure. */ }
-    if(isBusyError(error))throw new DatabaseBusyError();
-    throw error;
+    translateDatabaseError(error);
   } finally {
     if(depth===0)transactionDepth.delete(db);
     else transactionDepth.set(db,depth);
