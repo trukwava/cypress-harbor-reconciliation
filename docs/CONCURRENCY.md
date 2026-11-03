@@ -10,6 +10,12 @@ Cypress Harbor is a local-only synthetic reconciliation demo. It is not a distri
 - Database triggers prevent cross-organization, cross-property, cross-currency, over-payment, and over-obligation allocations. Duplicate allocations on the same payment/obligation pair are additionally restricted by a unique key.
 - When a separate SQLite writer holds the lock for too long, the API returns HTTP **409** with guidance to refresh and retry. It must never convert such contention into an unexplained 500 or partially commit an allocation.
 
+## Atomic demo reset
+
+A previous reset committed deletion before starting fixture reconstruction. An interruption between those stages could leave a tenant empty. Reset now owns a single `BEGIN IMMEDIATE` transaction, while individual seed/import/reconciliation operations use nested `SAVEPOINT` scopes. Their inner work is not durable until the outer reset commits. SQL errors and process termination during reseeding leave the original records and reviewer history intact after SQLite recovery.
+
+Automated tests inject an error on the first reinserted entity and kill a separate process with `SIGKILL` during reseeding; both require the earlier reviewed reconciliation and its history to survive. Successful resets remain deliberately destructive and keep named user accounts.
+
 ## Automated coverage
 
 The Node suite tests competing connections with an intentionally held writer lock, then submits two genuinely simultaneous match decisions from separate Node worker threads using independent SQLite connections. An HTTP integration case submits the same proposal from two signed-in reviewer/admin sessions. Exactly one decision may succeed; the other must receive a conflict. All cases verify a single allocation, a single decision, and a single audit event.
