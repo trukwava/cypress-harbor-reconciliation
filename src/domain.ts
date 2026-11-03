@@ -1,4 +1,4 @@
-import {DB,DEMO_ORG,rows,one,run,now,id,sha,transaction} from './db';
+import {DB,DEMO_ORG,rows,one,run,now,id,sha,transaction,DatabaseCapacityError,isSqliteCapacityError} from './db';
 import {parseCSV,required} from './csv';
 export const RULE_VERSION='CHH-1.0.0';
 export type Kind='obligation'|'payment';
@@ -109,11 +109,18 @@ function payments(db:DB,org:string){return rows(db,'SELECT p.*,s.as_of report_as
 function obligations(db:DB,org:string){return rows(db,'SELECT o.*,s.as_of report_as_of FROM obligations o JOIN source_reports s ON o.report_id=s.id WHERE o.org_id=? ORDER BY o.source_key',org);}
 export function addAllocation(db:DB,org:string,paymentId:string,obligationId:string,amount:number,actor='Demo Reviewer'){
   if(!Number.isSafeInteger(amount)||amount<=0)throw new DomainError('Allocation must be a positive amount in cents');
-  const allocId=id('alloc');
-  try {run(db,'INSERT INTO allocations VALUES (?,?,?,?,?,?,?)',allocId,org,paymentId,obligationId,amount,now(),actor);}
-  catch(e){throw new DomainError(`Allocation rejected: ${(e as Error).message}`,409);}
-  audit(db,org,'allocation.created','allocation',allocId,{payment_id:paymentId,obligation_id:obligationId,amount_minor:amount},actor);
-  return allocId;
+  // A direct call is atomic too: if the audit write fails, an allocation may
+  // not survive without its supporting event. Nested calls use SAVEPOINTs.
+  return transaction(db,()=>{
+    const allocId=id('alloc');
+    try {run(db,'INSERT INTO allocations VALUES (?,?,?,?,?,?,?)',allocId,org,paymentId,obligationId,amount,now(),actor);}
+    catch(e){
+      if(isSqliteCapacityError(e))throw new DatabaseCapacityError();
+      throw new DomainError(`Allocation rejected: ${(e as Error).message}`,409);
+    }
+    audit(db,org,'allocation.created','allocation',allocId,{payment_id:paymentId,obligation_id:obligationId,amount_minor:amount},actor);
+    return allocId;
+  });
 }
 function issueKey(type:string,oid?:string,pid?:string,source?:string){return [type,oid||'',pid||'',source||''].join(':');}
 export function reconcile(db:DB,org=DEMO_ORG,actor='Demo Reviewer'){
@@ -223,7 +230,7 @@ export function addAlias(db:DB,propertyId:string,alias:string,org=DEMO_ORG,actor
   const matches=propResolve(db,org,alias);
   if(matches.reason==='Ambiguous property identity')throw new DomainError('Alias collides with an ambiguous address',409);
   if(matches.id && matches.id!==propertyId)throw new DomainError('Alias already resolves to another property',409);
-  try {run(db,'INSERT INTO aliases VALUES (?,?,?,?,?)',id('alias'),org,propertyId,alias.trim(),1);}catch(e){throw new DomainError('Alias already exists',409);}
+  try {run(db,'INSERT INTO aliases VALUES (?,?,?,?,?)',id('alias'),org,propertyId,alias.trim(),1);}catch(e){if(isSqliteCapacityError(e))throw new DatabaseCapacityError();throw new DomainError('Alias already exists',409);}
   audit(db,org,'property.alias_added','property',propertyId,{alias},actor);return {property_id:propertyId,alias};
 }
 export function state(db:DB,org=DEMO_ORG,selectedRun?:string){
