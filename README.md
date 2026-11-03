@@ -53,7 +53,7 @@ The suite includes allocation and property/organization boundary tests, CSV malf
 
 ## Data storage and reset
 
-The SQLite database persists to `data/reconciliation.sqlite` by default. The **Reset demo** action replaces only the demo tenant's financial records with the original fixtures, retaining local accounts and sessions. Reset is destructive for demo decisions. Download an export beforehand if you want to preserve a run. The app does not automatically delete the local SQLite database; delete the `data/` directory manually when the server is stopped if you want a clean local removal.
+The SQLite database persists to `data/reconciliation.sqlite` by default. The **Reset demo** action replaces only the demo tenant's financial records with the original fixtures, retaining local accounts and sessions. Reset is destructive for demo decisions **only after a successful reset**. Deletion and fixture recreation are committed as one SQLite transaction; a failed or interrupted reset preserves the prior tenant history. Download an export beforehand if you want to preserve a run. The app does not automatically delete the local SQLite database; delete the `data/` directory manually when the server is stopped if you want a clean local removal.
 
 ## Backup and recovery
 
