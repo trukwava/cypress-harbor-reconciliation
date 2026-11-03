@@ -12,6 +12,7 @@ const db=createDB(filename);
 db.function('interrupt_import',()=>{
   fs.writeFileSync(marker,'entered second CSV row');
   process.kill(process.pid,'SIGKILL');
+  return null; // Conform to node:sqlite callback's SQL-value type.
 });
 db.exec("CREATE TEMP TRIGGER crash_during_import BEFORE INSERT ON source_rows WHEN NEW.source_key='FAULT-CRASH-2' BEGIN SELECT interrupt_import(); END;");
 const csv=[
