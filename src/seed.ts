@@ -78,10 +78,12 @@ export function seed(db:DB,force=false){
   reconcile(db);
 }
 export function resetDemo(db:DB){
-  transaction(db,()=>{
+  return transaction(db,()=>{
     const tables=['audit_events','resolutions','exceptions','match_decisions','match_candidates','run_snapshots','reconciliation_runs','import_conflicts','allocations','obligations','payments','source_rows','import_batches','source_reports','aliases','external_accounts','properties','entities'];
     for(const t of tables)run(db,`DELETE FROM ${t} WHERE ${t==='organizations'?'id':'org_id'}=?`,DEMO_ORG);
+    // Reseeding creates source reports, allocations and a frozen run. Keep all
+    // of them in the same outer transaction: interruption restores old data.
+    seed(db,true);
+    return {reset:true,org:DEMO_ORG};
   });
-  seed(db,true);
-  return {reset:true,org:DEMO_ORG};
 }
