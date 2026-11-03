@@ -152,20 +152,32 @@ export class DatabaseBusyError extends Error {
 function isBusyError(error:unknown):boolean {
   return /database is locked|database is busy|SQLITE_BUSY|SQLITE_LOCKED/i.test(String((error as Error)?.message||error));
 }
+// Nested operations share the outer BEGIN IMMEDIATE writer lock, but their
+// failures are isolated by SAVEPOINTs. This makes reset + reseed all-or-nothing.
+const transactionDepth=new WeakMap<DB,number>();
 export function transaction<T>(db:DB,fn:()=>T):T {
+  const depth=transactionDepth.get(db)||0;
+  const savepoint='chh_nested_'+depth;
   try {
-    db.exec('BEGIN IMMEDIATE'); // SQLite serializes writers across connections.
+    db.exec(depth===0?'BEGIN IMMEDIATE':'SAVEPOINT '+savepoint);
   } catch(error){
     if(isBusyError(error))throw new DatabaseBusyError();
     throw error;
   }
+  transactionDepth.set(db,depth+1);
   try {
     const result=fn();
-    db.exec('COMMIT');
+    db.exec(depth===0?'COMMIT':'RELEASE SAVEPOINT '+savepoint);
     return result;
   } catch(error){
-    try {db.exec('ROLLBACK');} catch { /* Preserve the original error. */ }
+    try {
+      db.exec(depth===0?'ROLLBACK':'ROLLBACK TO SAVEPOINT '+savepoint);
+      if(depth>0)db.exec('RELEASE SAVEPOINT '+savepoint);
+    } catch { /* Preserve the initiating failure. */ }
     if(isBusyError(error))throw new DatabaseBusyError();
     throw error;
+  } finally {
+    if(depth===0)transactionDepth.delete(db);
+    else transactionDepth.set(db,depth);
   }
 }
