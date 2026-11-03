@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
-import {createDB,DEMO_ORG,one} from '../src/db';
+import {createDB,DEMO_ORG,one,DatabaseCapacityError} from '../src/db';
 import {seed} from '../src/seed';
 import {commitImport,decideMatch,reviewException,state} from '../src/domain';
 import {createBackup,restoreBackup,verifyBackup} from '../src/backup';
@@ -50,7 +50,7 @@ test('SQLite page-quota exhaustion rolls back a multi-row import and allows a cl
     const effective=Number((db.prepare('PRAGMA max_page_count='+limit).get() as any).max_page_count);
     assert.equal(effective,limit);
     try {
-      assert.throws(()=>commitImport(db,input),/database or disk is full|SQLITE_FULL|database is full/i);
+      assert.throws(()=>commitImport(db,input),(error:any)=>error instanceof DatabaseCapacityError&&/storage capacity/.test(error.message));
     } finally {
       db.exec('PRAGMA max_page_count=1073741823');
     }
